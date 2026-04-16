@@ -181,26 +181,103 @@ nav li.active i{text-shadow:0 0 12px var(--yellow-glow);}
   color:var(--yellow);padding:8px 12px;
   background:var(--yellow-dim);border-radius:10px;
 }
+/* ── MOBILE BOTTOM NAV ── */
 #mobile-bottom-nav{display:none;}
 #mobile-bottom-nav.fixed{
   position:fixed;left:0;right:0;bottom:0;
-  z-index:150;display:flex;align-items:center;justify-content:space-between;
-  gap:10px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
-  background:rgba(11,11,11,0.92);backdrop-filter:blur(18px);
-  border-top:1px solid rgba(255,255,255,0.08);
+  z-index:150;
+  display:flex;align-items:flex-end;justify-content:space-around;
+  padding:0 8px calc(12px + env(safe-area-inset-bottom));
+  background:rgba(11,11,11,0.96);
+  backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  border-top:1px solid rgba(255,255,255,0.07);
+  box-shadow:0 -8px 40px rgba(0,0,0,0.6);
+  min-height:calc(68px + env(safe-area-inset-bottom));
 }
 .mobile-nav-item{
-  flex:1;min-height:54px;
+  flex:1;
+  min-height:58px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:4px;padding:0 8px;border-radius:18px;
-  color:var(--text-dim);font-size:.72rem;font-weight:600;
-  background:rgba(255,255,255,0.03);transition:transform .24s ease,background .24s ease,opacity .24s ease;
+  gap:3px;padding:8px 4px 4px;
+  border-radius:18px;border:none;
+  color:var(--text-muted);font-size:.62rem;font-weight:700;letter-spacing:.02em;
+  background:transparent;
+  transition:color .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1);
+  cursor:pointer;position:relative;
+  -webkit-tap-highlight-color:transparent;
+  font-family:var(--font);
 }
-.mobile-nav-item i{font-size:1.05rem;}
-.mobile-nav-item.active,
-.mobile-nav-item:hover{background:rgba(255,214,0,0.12);color:var(--yellow);transform:translateY(-1px);}
-.mobile-nav-item.active i{color:var(--yellow);}
-.mobile-nav-item span{white-space:nowrap;}
+.mobile-nav-item i{
+  font-size:1.1rem;
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1), color .22s ease, filter .22s ease;
+  display:block;margin-bottom:2px;
+}
+.mobile-nav-item span{white-space:nowrap;transition:opacity .2s,color .2s;}
+.mobile-nav-item.active{color:var(--yellow);}
+.mobile-nav-item.active i{
+  transform:translateY(-3px) scale(1.18);color:var(--yellow);
+  filter:drop-shadow(0 0 8px rgba(255,214,0,0.7));
+}
+.mobile-nav-item:active{transform:scale(0.86);}
+/* FAB center button */
+.mobile-nav-fab{
+  width:56px;height:56px;min-width:56px;
+  border-radius:18px;background:var(--yellow);
+  border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--black);font-size:1.3rem;
+  margin-bottom:calc(8px + env(safe-area-inset-bottom)/2);
+  box-shadow:0 4px 20px rgba(255,214,0,0.45),0 0 0 0 rgba(255,214,0,0.3);
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s ease;
+  position:relative;z-index:2;
+  -webkit-tap-highlight-color:transparent;flex-shrink:0;
+  animation:fabPulse 3s ease-in-out infinite;
+}
+.mobile-nav-fab:active{transform:scale(0.88) rotate(-8deg);box-shadow:0 2px 10px rgba(255,214,0,0.3);animation:none;}
+.mobile-nav-fab i{transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
+.mobile-nav-fab.open i{transform:rotate(45deg);}
+@keyframes fabPulse{
+  0%,100%{box-shadow:0 4px 20px rgba(255,214,0,0.45),0 0 0 0 rgba(255,214,0,0.3);}
+  50%{box-shadow:0 4px 28px rgba(255,214,0,0.6),0 0 0 8px rgba(255,214,0,0);}
+}
+/* FAB quick-action menu */
+.fab-menu{
+  position:fixed;
+  bottom:calc(90px + env(safe-area-inset-bottom));
+  left:50%;transform:translateX(-50%) translateY(12px);
+  display:flex;flex-direction:column;gap:10px;align-items:center;
+  z-index:160;opacity:0;pointer-events:none;
+  transition:opacity .25s ease,transform .3s cubic-bezier(.34,1.56,.64,1);
+}
+.fab-menu.open{opacity:1;pointer-events:all;transform:translateX(-50%) translateY(0);}
+.fab-menu-item{
+  display:flex;align-items:center;gap:10px;
+  background:var(--black-2);border:1px solid rgba(255,214,0,0.25);
+  border-radius:14px;padding:10px 18px;
+  color:var(--yellow);font-size:.85rem;font-weight:700;
+  cursor:pointer;white-space:nowrap;
+  box-shadow:0 8px 24px rgba(0,0,0,0.5);
+  transition:transform .18s ease,background .18s ease;
+  -webkit-tap-highlight-color:transparent;font-family:var(--font);
+}
+.fab-menu-item i{font-size:1rem;width:20px;text-align:center;}
+.fab-menu-item:active{transform:scale(0.94);background:var(--yellow-dim);}
+.fab-backdrop{
+  position:fixed;inset:0;z-index:155;
+  background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);
+  opacity:0;pointer-events:none;transition:opacity .25s ease;
+}
+.fab-backdrop.open{opacity:1;pointer-events:all;}
+.mobile-nav-badge{
+  position:absolute;top:6px;right:calc(50% - 18px);
+  background:var(--red);color:#fff;
+  font-size:.55rem;font-weight:800;
+  padding:2px 5px;border-radius:20px;font-family:var(--font-mono);
+  border:1.5px solid var(--black);min-width:16px;text-align:center;
+  animation:badgePop .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes badgePop{from{transform:scale(0);}to{transform:scale(1);}}
 .btn-topbar{
   padding:10px 18px;background:var(--yellow);
   border:none;border-radius:12px;
@@ -1009,16 +1086,20 @@ textarea.form-input{resize:vertical;min-height:90px;line-height:1.6;}
 
 /* ── RESPONSIVE MOBILE ── */
 @media(max-width:768px){
-  .sidebar{width:var(--sidebar-w);transform:translateX(-100%);} 
+  .sidebar{width:var(--sidebar-w);transform:translateX(-100%);}
   .sidebar.mobile-open{transform:translateX(0);}
   .sidebar.collapsed{width:0;transform:translateX(-100%);}
   .main{margin-left:0!important;}
   .sidebar.mobile-open ~ .main{margin-left:0;}
   .topbar-search{max-width:none;flex:1;}
   .topbar-shortcut{display:none;}
-  .topbar-right{gap:8px;flex-wrap:wrap;justify-content:flex-end;}
-  .topbar-clock{font-size:.75rem;padding:8px 10px;}
+  /* hide heavy topbar items — FAB handles quick-add */
+  #quick-add-btn{display:none;}
+  #lock-btn{display:none;}
+  .topbar-right{gap:8px;flex-wrap:nowrap;justify-content:flex-end;}
+  .topbar-clock{font-size:.72rem;padding:6px 9px;}
   .level-badge{width:28px;height:28px;font-size:.7rem;}
+  #sync-indicator{font-size:.6rem;padding:4px 7px;}
   .home-grid{grid-template-columns:repeat(2,1fr);}
   .home-two-col{grid-template-columns:1fr;}
   .task-columns{grid-template-columns:1fr;}
@@ -1029,12 +1110,13 @@ textarea.form-input{resize:vertical;min-height:90px;line-height:1.6;}
   .decision-grid{grid-template-columns:1fr;}
   .followups-grid{grid-template-columns:1fr;}
   .notes-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));}
-  .topbar{padding:10px 14px 10px 16px;height:auto;gap:10px;}
+  .topbar{padding:10px 14px 10px 16px;height:auto;gap:10px;transition:transform .3s ease;}
   .topbar-sidebar-toggle{min-width:44px;min-height:44px;width:44px;height:44px;padding:0;}
   .avatar{width:32px;height:32px;font-size:.8rem;}
   .btn-topbar{padding:10px 14px;font-size:.82rem;min-width:fit-content;min-height:44px;}
   .content{padding:18px 16px 110px;}
   .card{margin-bottom:14px;}
+  .card:hover{transform:none;} /* disable hover lift on touch */
   .modal-box{width:95vw;max-width:none;}
   #mobile-bottom-nav{display:flex;}
 }
@@ -1135,18 +1217,33 @@ textarea.form-input{resize:vertical;min-height:90px;line-height:1.6;}
   </div>
 </div>
 
+<!-- FAB backdrop -->
+<div class="fab-backdrop" id="fab-backdrop" onclick="closeFabMenu()"></div>
+
+<!-- FAB quick-action menu -->
+<div class="fab-menu" id="fab-menu">
+  <div class="fab-menu-item" onclick="closeFabMenu();navigateTo('notes')"><i class="fas fa-sticky-note"></i> New Note</div>
+  <div class="fab-menu-item" onclick="closeFabMenu();navigateTo('habits')"><i class="fas fa-fire"></i> Log Habit</div>
+  <div class="fab-menu-item" onclick="closeFabMenu();if(typeof openQuickAdd==='function')openQuickAdd();"><i class="fas fa-bolt"></i> Quick Add Task</div>
+  <div class="fab-menu-item" onclick="closeFabMenu();navigateTo('goals')"><i class="fas fa-bullseye"></i> View Goals</div>
+</div>
+
 <nav id="mobile-bottom-nav" class="mobile-bottom-nav fixed">
-  <button type="button" class="mobile-nav-item active" onclick="navigateTo('home')">
-    <i class="fas fa-home"></i><span>Home</span>
+  <button type="button" class="mobile-nav-item active" data-mob="home" onclick="mobileNav(this,'home')">
+    <i class="fas fa-house"></i><span>Home</span>
   </button>
-  <button type="button" class="mobile-nav-item" onclick="navigateTo('tasks')">
+  <button type="button" class="mobile-nav-item" data-mob="tasks" onclick="mobileNav(this,'tasks')">
     <i class="fas fa-check-square"></i><span>Tasks</span>
+    <span class="mobile-nav-badge" id="mob-badge-tasks" style="display:none">0</span>
   </button>
-  <button type="button" class="mobile-nav-item" onclick="navigateTo('habits')">
+  <button type="button" class="mobile-nav-fab" id="fab-btn" onclick="toggleFabMenu()" aria-label="Quick actions">
+    <i class="fas fa-plus"></i>
+  </button>
+  <button type="button" class="mobile-nav-item" data-mob="habits" onclick="mobileNav(this,'habits')">
     <i class="fas fa-fire"></i><span>Habits</span>
   </button>
-  <button type="button" class="mobile-nav-item" onclick="navigateTo('goals')">
-    <i class="fas fa-bullseye"></i><span>Goals</span>
+  <button type="button" class="mobile-nav-item" data-mob="review" onclick="mobileNav(this,'review')">
+    <i class="fas fa-chart-line"></i><span>Review</span>
   </button>
 </nav>
 
@@ -1322,6 +1419,14 @@ function saveState() {
   localStorage.setItem('mlos_dailyStreak', appState.dailyStreak);
   localStorage.setItem('mlos_lastActivityDate', appState.lastActivityDate);
   updateBadges();
+  // Cloud sync — calls Firebase debounced save if module has loaded
+  try {
+    if (typeof window.debouncedFirebaseSave === 'function') {
+      window.debouncedFirebaseSave(appState);
+    }
+  } catch(e) {
+    console.warn('[Firebase] saveState cloud sync error (non-fatal):', e);
+  }
 }
 
 function uid() {
@@ -3429,6 +3534,99 @@ function lockSystem() {
 document.getElementById('passkey-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') checkAccess();
 });
+
+// ═══════════════════════════════════════════════
+// MOBILE NAV — active state + badge sync
+// ═══════════════════════════════════════════════
+function mobileNav(el, section) {
+  document.querySelectorAll('.mobile-nav-item').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  navigateTo(section);
+  if (navigator.vibrate) navigator.vibrate(8);
+}
+
+const _origNavigateTo = window.navigateTo;
+window.navigateTo = function(section) {
+  if (typeof _origNavigateTo === 'function') _origNavigateTo(section);
+  document.querySelectorAll('.mobile-nav-item[data-mob]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mob === section);
+  });
+  const taskCount = (window.appState && window.appState.tasks ? window.appState.tasks : []).filter(t => !t.done).length;
+  const badge = document.getElementById('mob-badge-tasks');
+  if (badge) {
+    badge.style.display = taskCount > 0 ? 'block' : 'none';
+    badge.textContent = taskCount > 9 ? '9+' : taskCount;
+  }
+};
+
+// ═══════════════════════════════════════════════
+// FAB MENU
+// ═══════════════════════════════════════════════
+function toggleFabMenu() {
+  const fab  = document.getElementById('fab-btn');
+  const menu = document.getElementById('fab-menu');
+  const back = document.getElementById('fab-backdrop');
+  const open = menu.classList.toggle('open');
+  back.classList.toggle('open', open);
+  fab.classList.toggle('open', open);
+  if (navigator.vibrate) navigator.vibrate(open ? 12 : 6);
+}
+function closeFabMenu() {
+  document.getElementById('fab-btn') && document.getElementById('fab-btn').classList.remove('open');
+  document.getElementById('fab-menu') && document.getElementById('fab-menu').classList.remove('open');
+  document.getElementById('fab-backdrop') && document.getElementById('fab-backdrop').classList.remove('open');
+}
+window.toggleFabMenu = toggleFabMenu;
+window.closeFabMenu  = closeFabMenu;
+
+// ═══════════════════════════════════════════════
+// SWIPE GESTURES — left/right to change sections
+// ═══════════════════════════════════════════════
+(function setupSwipe() {
+  var sections = ['home','tasks','habits','goals','notes','follow-ups','systems','learning','calendar','review'];
+  var startX = 0, startY = 0, startTime = 0;
+  document.addEventListener('touchstart', function(e) {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startTime = Date.now();
+  }, { passive: true });
+  document.addEventListener('touchend', function(e) {
+    var dx = e.changedTouches[0].clientX - startX;
+    var dy = e.changedTouches[0].clientY - startY;
+    var dt = Date.now() - startTime;
+    if (dt > 400 || Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.8) return;
+    if (document.querySelector('.modal[style*="flex"]')) return;
+    var cur = typeof window.currentSection !== 'undefined' ? window.currentSection : 'home';
+    var idx = sections.indexOf(cur);
+    if (idx === -1) return;
+    var next = null;
+    if (dx < -60 && idx < sections.length - 1) next = sections[idx + 1];
+    if (dx >  60 && idx > 0)                   next = sections[idx - 1];
+    if (!next) return;
+    window.navigateTo(next);
+    if (navigator.vibrate) navigator.vibrate(6);
+  }, { passive: true });
+})();
+
+// ═══════════════════════════════════════════════
+// MOBILE TOPBAR — hide on scroll down, show on scroll up
+// ═══════════════════════════════════════════════
+(function setupMobileTopbarScroll() {
+  var lastY = 0;
+  var topbar = document.querySelector('.topbar');
+  var contentEl = document.getElementById('content');
+  if (!contentEl || !topbar) return;
+  contentEl.addEventListener('scroll', function() {
+    if (window.innerWidth > 768) return;
+    var y = this.scrollTop;
+    if (y > lastY + 8 && y > 80) {
+      topbar.style.transform = 'translateY(-100%)';
+    } else if (y < lastY - 8) {
+      topbar.style.transform = 'translateY(0)';
+    }
+    lastY = y;
+  }, { passive: true });
+})();
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════
@@ -3615,29 +3813,13 @@ function listenToFirebase() {
 }
 window.listenToFirebase = listenToFirebase;
 
-// ═══════════════════════════════════════════════
-// [INTEGRATION POINT] — override saveState()
-// Patch the existing saveState to also call Firebase.
-// Uses 'load' event so appState is guaranteed to be defined.
-// ═══════════════════════════════════════════════
-window.addEventListener('load', function patchSaveState() {
-  const _original = window.saveState;
-  window.saveState = function() {
-    if (typeof _original === 'function') _original.call(this);
-    // Debounced cloud save — fail-safe, never blocks local save
-    try {
-      if (window.appState) debouncedFirebaseSave(window.appState);
-    } catch(e) {
-      console.warn('[Firebase] saveState patch error (non-fatal):', e);
-    }
-  };
-});
+// saveState() now calls debouncedFirebaseSave() directly — no patch needed.
 
 // ═══════════════════════════════════════════════
 // [INTEGRATION POINT] — app boot with Firebase load
 // Runs after DOMContentLoaded, tries cloud first, falls back to localStorage
 // ═══════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', async () => {
+window.addEventListener('load', async () => {
   setSyncStatus('syncing', 'Loading…');
 
   try {
