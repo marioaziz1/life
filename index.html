@@ -3444,9 +3444,9 @@ document.getElementById('passkey-input').addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════
 // [FIREBASE SETUP] — SDK imports + initialization
 // ═══════════════════════════════════════════════
-import { initializeApp }    from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp }
-  from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+  from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDGXV_eRbZVrT0IPZ1ebyqSbtEirZ5lJLY",
@@ -3467,12 +3467,9 @@ window.db = db;
 // [USER IDENTIFICATION] — stable anonymous userId
 // ═══════════════════════════════════════════════
 function getUserId() {
-  let id = localStorage.getItem('mlos_uid');
-  if (!id) {
-    id = 'user_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
-    localStorage.setItem('mlos_uid', id);
-  }
-  return id;
+  // Fixed shared ID — all your devices sync to the same Firestore document.
+  // Change 'mario_main_user' to any private string only you know.
+  return 'mario_main_user';
 }
 window.getUserId = getUserId;
 
@@ -3620,9 +3617,10 @@ window.listenToFirebase = listenToFirebase;
 
 // ═══════════════════════════════════════════════
 // [INTEGRATION POINT] — override saveState()
-// Patch the existing saveState to also call Firebase
+// Patch the existing saveState to also call Firebase.
+// Uses 'load' event so appState is guaranteed to be defined.
 // ═══════════════════════════════════════════════
-(function patchSaveState() {
+window.addEventListener('load', function patchSaveState() {
   const _original = window.saveState;
   window.saveState = function() {
     if (typeof _original === 'function') _original.call(this);
@@ -3633,7 +3631,7 @@ window.listenToFirebase = listenToFirebase;
       console.warn('[Firebase] saveState patch error (non-fatal):', e);
     }
   };
-})();
+});
 
 // ═══════════════════════════════════════════════
 // [INTEGRATION POINT] — app boot with Firebase load
