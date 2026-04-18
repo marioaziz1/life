@@ -1888,6 +1888,7 @@ const appState = {
   notes: [],
   goals: [],
   systems: [],
+  studies: [],
   followUps: [],
   followUpCategories: [],
   habits: [],
@@ -1902,7 +1903,7 @@ const appState = {
 
 function loadState() {
   try {
-    const keys = ['tasks','notes','goals','systems','followUps','followUpCategories','habits','learningCategories','calendar','settings'];
+    const keys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories','habits','learningCategories','calendar','settings'];
     keys.forEach(k => {
       const v = localStorage.getItem('mlos_' + k);
       if (v) appState[k] = JSON.parse(v);
@@ -1978,7 +1979,7 @@ function loadState() {
 }
 
 function saveState() {
-  const keys = ['tasks','notes','goals','systems','followUps','followUpCategories','habits','learningCategories','calendar','settings'];
+  const keys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories','habits','learningCategories','calendar','settings'];
   keys.forEach(k => localStorage.setItem('mlos_' + k, JSON.stringify(appState[k])));
   localStorage.setItem('mlos_focusSessions', appState.focusSessions);
   localStorage.setItem('mlos_xp', appState.xp);
@@ -3236,49 +3237,61 @@ function renderLearning(el) {
 }
 
 function renderStudies(el) {
-  const completed = appState.learningCategories.flatMap(cat => cat.items.filter(i => i.completed).map(item => ({ ...item, category: cat.title })));
+  const studyIcons = ['fa-book','fa-graduation-cap','fa-brain','fa-flask','fa-scroll','fa-microscope','fa-pen-nib','fa-landmark'];
   let html = `<div class="page-header">
     <div><div class="page-title"><span>//</span> STUDIES</div>
-    <div class="page-subtitle">${completed.length} completed item${completed.length===1?'':'s'}</div></div>
-  </div>`;
+    <div class="page-subtitle">${appState.studies.length} saved stud${appState.studies.length===1?'y':'ies'}</div></div>
+    <div class="section-actions">
+      <button class="btn btn-primary btn-sm" onclick="openAddModal('study')"><i class="fas fa-plus"></i> Add Study</button>
+    </div>
+  </div><div class="systems-grid">`;
 
-  if (!completed.length) {
-    html += `<div class="empty-state"><i class="fas fa-book-open"></i>No completed studies yet. Finish a learning item and save a summary.</div>`;
-  } else {
-    html += `<div class="learning-grid">`;
-    appState.learningCategories.forEach(cat => {
-      const items = cat.items.filter(i => i.completed);
-      if (!items.length) return;
-      html += `<div class="card learning-card">
-        <div class="learning-category-header">
-          <div>
-            <div class="card-title">${escHtml(cat.title)}</div>
-            <div class="learning-meta">${items.length} completed</div>
-          </div>
-        </div>`;
-      items.forEach(item => {
-        html += `<div class="learning-item completed" id="study-${item.id}">
-          <div class="learning-item-top">
-            <div class="learning-icon"><i class="fas fa-link"></i></div>
-            <div class="learning-info">
-              <div class="learning-title">${escHtml(item.title)}</div>
-              <div class="learning-meta">Category: ${escHtml(cat.title)}</div>
-            </div>
-          </div>
-          <div class="learning-actions">
-            <button class="btn btn-primary btn-sm" onclick="openEditLearningItem('${item.id}')"><i class="fas fa-pencil-alt"></i> Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteLearningItem('${item.id}','${cat.id}')"><i class="fas fa-trash"></i> Delete</button>
-            ${item.summaryLink ? `<a class="btn btn-primary btn-sm" href="${escHtml(item.summaryLink)}" target="_blank"><i class="fas fa-external-link-alt"></i> Open</a>` : `<button class="btn btn-primary btn-sm" onclick="openSummaryModalById('${item.id}')"><i class="fas fa-plus"></i> Add Summary</button>`}
-            <button class="btn btn-ghost btn-sm" onclick="openSummaryModalById('${item.id}')"><i class="fas fa-pencil-alt"></i> Update</button>
-          </div>
-        </div>`;
-      });
-      html += `</div>`;
-    });
-    html += `</div>`;
-  }
+  appState.studies.forEach((s, i) => {
+    const icon = studyIcons[i % studyIcons.length];
+    html += `<div class="system-card" id="study-${s.id}">
+      <div class="system-top">
+        <div class="system-icon"><i class="fas ${icon}"></i></div>
+        <div style="min-width:0;flex:1;">
+          <div class="system-name">${escHtml(s.name)}</div>
+          ${s.description ? `<div class="system-link">${escHtml(s.description)}</div>` : ''}
+        </div>
+      </div>
+      ${s.link ? `<div class="system-last"><i class="fas fa-link" style="font-size:.7rem;margin-right:5px;opacity:.5;"></i>${escHtml(s.link)}</div>` : '<div class="system-last" style="color:var(--text-muted);font-size:.72rem;">No link added</div>'}
+      <div class="system-actions">
+        ${s.link ? `<a href="${escHtml(s.link)}" target="_blank" class="btn btn-primary btn-sm" onclick="updateStudyAccess('${s.id}')"><i class="fas fa-external-link-alt"></i> Open Link</a>` : `<button class="btn btn-ghost btn-sm" onclick="openAddStudyLink('${s.id}')"><i class="fas fa-link"></i> Add Link</button>`}
+        <button class="btn-icon" onclick="editStudy('${s.id}')"><i class="fas fa-pencil-alt"></i></button>
+        <button class="btn-icon" onclick="deleteStudy('${s.id}')"><i class="fas fa-trash"></i></button>
+      </div>
+    </div>`;
+  });
 
+  if (!appState.studies.length) html += `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-graduation-cap"></i>No studies yet. Add your first study!</div>`;
+
+  html += `</div>`;
   el.innerHTML = html;
+}
+
+function updateStudyAccess(id) {
+  const s = appState.studies.find(x => x.id === id);
+  if (s) { s.lastOpened = Date.now(); saveState(); }
+}
+
+function editStudy(id) {
+  const s = appState.studies.find(x => x.id === id);
+  if (s) openAddModal('study', s);
+}
+
+function deleteStudy(id) {
+  if (!confirm('Delete this study?')) return;
+  appState.studies = appState.studies.filter(s => s.id !== id);
+  saveState();
+  renderSection('studies');
+  showToast('Study removed', 'error');
+}
+
+function openAddStudyLink(id) {
+  const s = appState.studies.find(x => x.id === id);
+  if (s) openAddModal('study-link', s);
 }
 
 function findLearningEntry(itemId) {
@@ -3311,21 +3324,15 @@ function deleteLearningCategory(categoryId) {
 }
 
 function deleteLearningItem(itemId, categoryId) {
-  // Search by categoryId if provided, otherwise search all categories
+  if (!confirm('Delete this learning item?')) return;
   const category = categoryId
     ? appState.learningCategories.find(c => c.id === categoryId)
     : appState.learningCategories.find(c => c.items.some(i => i.id === itemId));
   if (!category) return;
-  if (!confirm('Are you sure you want to delete this learning item?')) return;
   category.items = category.items.filter(i => i.id !== itemId);
   saveState();
-  // Re-render both Learning and Studies so both stay in sync
-  if (currentSection === 'studies') {
-    renderSection('studies');
-  } else {
-    renderSection('learning');
-  }
-  showToast('Item deleted','error');
+  renderSection('learning');
+  showToast('Item deleted', 'error');
 }
 
 function updateLearningProgress(id, val) {
@@ -3357,7 +3364,6 @@ function openSummaryModalById(itemId) {
   const found = findLearningEntry(itemId);
   if (found) openSummaryModal(found.item);
 }
-
 
 
 // ── CALENDAR ──
@@ -3842,8 +3848,8 @@ function openAddModal(type, existing=null, preset={}) {
   const saveBtn = document.getElementById('modal-save-btn');
   const isExisting = existing && existing.id;
 
-  const icons = {task:'fa-check-square',note:'fa-sticky-note',goal:'fa-bullseye',followup:'fa-user',system:'fa-cogs',learning:'fa-graduation-cap','learning-category':'fa-folder-plus','learning-item':'fa-graduation-cap','learning-summary':'fa-link',habit:'fa-fire'};
-  const labels = {task:'Task',note:'Note',goal:'Goal',followup:'Follow-Up',system:'System',learning:'Learning Item','learning-category':'Learning Category','learning-item':'Learning Item','learning-summary':'Summary Link',habit:'Habit'};
+  const icons = {task:'fa-check-square',note:'fa-sticky-note',goal:'fa-bullseye',followup:'fa-user',system:'fa-cogs',study:'fa-graduation-cap','study-link':'fa-link',learning:'fa-graduation-cap','learning-category':'fa-folder-plus','learning-item':'fa-graduation-cap','learning-summary':'fa-link',habit:'fa-fire'};
+  const labels = {task:'Task',note:'Note',goal:'Goal',followup:'Follow-Up',system:'System',study:'Study','study-link':'Study Link',learning:'Learning Item','learning-category':'Learning Category','learning-item':'Learning Item','learning-summary':'Summary Link',habit:'Habit'};
 
   title.innerHTML = `<i class="fas ${icons[type]||'fa-plus'}"></i> ${isExisting?'Edit':'New'} ${labels[type]||type}`;
 
@@ -3916,6 +3922,18 @@ function openAddModal(type, existing=null, preset={}) {
       <div class="form-group"><label class="form-label">System Name *</label>
         <input class="form-input" id="fi-title" placeholder="System name..." value="${escHtml(existing?.name||'')}"></div>
       <div class="form-group"><label class="form-label">URL</label>
+        <input class="form-input" id="fi-link" type="url" placeholder="https://..." value="${escHtml(existing?.link||'')}"></div>`;
+  } else if (type === 'study') {
+    bodyHtml = `
+      <div class="form-group"><label class="form-label">Study Name *</label>
+        <input class="form-input" id="fi-title" placeholder="Study name..." value="${escHtml(existing?.name||'')}"></div>
+      <div class="form-group"><label class="form-label">Description</label>
+        <input class="form-input" id="fi-description" placeholder="Short description..." value="${escHtml(existing?.description||'')}"></div>
+      <div class="form-group"><label class="form-label">Link (optional)</label>
+        <input class="form-input" id="fi-link" type="url" placeholder="https://..." value="${escHtml(existing?.link||'')}"></div>`;
+  } else if (type === 'study-link') {
+    bodyHtml = `
+      <div class="form-group"><label class="form-label">Study Link *</label>
         <input class="form-input" id="fi-link" type="url" placeholder="https://..." value="${escHtml(existing?.link||'')}"></div>`;
   } else if (type === 'learning-category') {
     bodyHtml = `
@@ -4042,6 +4060,23 @@ function openAddModal(type, existing=null, preset={}) {
       if (existing) { Object.assign(existing, data); }
       else { appState.systems.push({ id: uid(), ...data }); }
       saveState(); closeModal(); renderSection('systems'); showToast('System ' + (existing?'updated':'added'),'success');
+    } else if (type === 'study') {
+      if (!title_val) { showToast('Please enter a study name','error'); return; }
+      const data = {
+        name: title_val,
+        description: document.getElementById('fi-description')?.value.trim() || '',
+        link: document.getElementById('fi-link')?.value.trim() || '',
+        lastOpened: existing?.lastOpened || Date.now(),
+        created: existing?.created || Date.now()
+      };
+      if (existing) { Object.assign(existing, data); }
+      else { appState.studies.push({ id: uid(), ...data }); }
+      saveState(); closeModal(); renderSection('studies'); showToast('Study ' + (existing?'updated':'added'), 'success');
+    } else if (type === 'study-link') {
+      const link = document.getElementById('fi-link')?.value.trim();
+      if (!link) { showToast('Please enter a link','error'); return; }
+      if (existing) { existing.link = link; }
+      saveState(); closeModal(); renderSection('studies'); showToast('Link saved', 'success');
     } else if (type === 'learning-category') {
       const data = { title: title_val };
       if (existing) { Object.assign(existing, data); }
@@ -4723,7 +4758,7 @@ async function saveToFirebase(state) {
     const userId = getUserId();
 
     // Collect all keys saved to localStorage
-    const keys = ['tasks','notes','goals','systems','followUps','followUpCategories',
+    const keys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
                   'habits','learningCategories','calendar','settings'];
     const payload = {};
     keys.forEach(k => { payload[k] = state[k]; });
@@ -4795,7 +4830,7 @@ function listenToFirebase() {
       if (_isApplyingRemote) return;
       _isApplyingRemote = true;
 
-      const keys = ['tasks','notes','goals','systems','followUps','followUpCategories',
+      const keys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
                     'habits','learningCategories','calendar','settings'];
       keys.forEach(k => {
         if (data[k] !== undefined) window.appState[k] = data[k];
@@ -4806,7 +4841,7 @@ function listenToFirebase() {
       if (data.lastActivityDate !== undefined) window.appState.lastActivityDate = data.lastActivityDate;
 
       // Persist locally too
-      const lsKeys = ['tasks','notes','goals','systems','followUps','followUpCategories',
+      const lsKeys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
                       'habits','learningCategories','calendar','settings'];
       lsKeys.forEach(k => localStorage.setItem('mlos_' + k, JSON.stringify(window.appState[k])));
       localStorage.setItem('mlos_focusSessions',    window.appState.focusSessions);
@@ -4847,7 +4882,7 @@ window.addEventListener('load', async () => {
 
     if (cloudData) {
       // Cloud data found — overwrite appState
-      const keys = ['tasks','notes','goals','systems','followUps','followUpCategories',
+      const keys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
                     'habits','learningCategories','calendar','settings'];
       keys.forEach(k => {
         if (cloudData[k] !== undefined) window.appState[k] = cloudData[k];
