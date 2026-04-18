@@ -1333,63 +1333,178 @@ textarea.form-input{resize:vertical;min-height:96px;line-height:1.65;}
 
 
 /* ── NOTIFICATION BELL ── */
+
+/* Bell button — lives in the topbar, always static */
+.notif-wrapper{position:relative;flex-shrink:0;}
 .notif-btn{
   position:relative;width:38px;height:38px;border-radius:10px;
   background:var(--glass);border:1px solid var(--glass-border);
-  color:var(--text-dim);cursor:pointer;transition:all .2s;
+  color:var(--text-dim);cursor:pointer;transition:var(--transition-fast);
   display:flex;align-items:center;justify-content:center;font-size:.9rem;
-  flex-shrink:0;
+  flex-shrink:0;-webkit-tap-highlight-color:transparent;
 }
 .notif-btn:hover{background:var(--yellow-dim);color:var(--yellow);border-color:rgba(255,214,0,.3);}
 .notif-btn.all-done{color:var(--green);border-color:rgba(68,255,136,.3);background:rgba(68,255,136,.08);}
 .notif-btn.all-done:hover{background:rgba(68,255,136,.15);}
+
+/* Badge on the bell icon */
 .notif-badge{
   position:absolute;top:-4px;right:-4px;
   background:var(--red);color:#fff;
   font-size:.55rem;font-weight:800;font-family:var(--font-mono);
   min-width:16px;height:16px;border-radius:20px;padding:0 4px;
   display:flex;align-items:center;justify-content:center;
-  border:2px solid var(--black);animation:badgePop .3s cubic-bezier(.34,1.56,.64,1);
+  border:2px solid var(--black);
+  pointer-events:none;
 }
 .notif-badge.green{background:var(--green);color:var(--black);}
+
+/* ─────────────────────────────────────────
+   DESKTOP: classic anchored dropdown
+   ───────────────────────────────────────── */
 .notif-dropdown{
-  position:absolute;top:calc(100% + 10px);right:0;
+  position:absolute;
+  top:calc(100% + 10px);
+  right:0;
   width:320px;
-  background:var(--black-3);border:1px solid var(--glass-border);
-  border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.7);
-  z-index:500;overflow:hidden;
-  animation:notifIn .2s cubic-bezier(.4,0,.2,1);
+  background:var(--black-3);
+  border:1px solid var(--glass-border);
+  border-radius:14px;
+  box-shadow:0 20px 60px rgba(0,0,0,.75);
+  z-index:600;
+  overflow:hidden;
+  /* hidden by default; JS sets display */
+  animation:notifDropIn .22s cubic-bezier(.4,0,.2,1);
 }
-@keyframes notifIn{from{opacity:0;transform:translateY(-8px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}
+@keyframes notifDropIn{
+  from{opacity:0;transform:translateY(-10px) scale(.97);}
+  to  {opacity:1;transform:translateY(0)     scale(1);}
+}
+
+/* ─────────────────────────────────────────
+   MOBILE MODAL OVERLAY — separate element,
+   rendered as a fixed full-screen layer.
+   Activated by JS via .notif-modal-open on <body>.
+   ───────────────────────────────────────── */
+
+/* The dim backdrop */
+.notif-modal-overlay{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.72);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  z-index:1100;              /* above topbar (z-index:100), sidebar (z-index:200), FAB (z-index:160) */
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+.notif-modal-overlay.active{
+  display:flex;
+  animation:notifOverlayIn .25s ease both;
+}
+@keyframes notifOverlayIn{
+  from{opacity:0;}
+  to  {opacity:1;}
+}
+
+/* The centred popup card */
+.notif-modal-card{
+  background:var(--black-3);
+  border:1px solid rgba(255,214,0,.15);
+  border-radius:20px;
+  box-shadow:0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(255,214,0,.06);
+  width:100%;
+  max-width:420px;
+  max-height:80vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  animation:notifModalIn .28s cubic-bezier(.34,1.3,.64,1) both;
+  /* prevent the card itself from being a close target */
+  pointer-events:all;
+}
+@keyframes notifModalIn{
+  from{opacity:0;transform:scale(.88) translateY(12px);}
+  to  {opacity:1;transform:scale(1)   translateY(0);}
+}
+
+/* Closing animation class toggled by JS */
+.notif-modal-overlay.closing{animation:notifOverlayOut .2s ease both;}
+.notif-modal-card.closing      {animation:notifModalOut  .2s cubic-bezier(.4,0,.2,1) both;}
+@keyframes notifOverlayOut{from{opacity:1;}to{opacity:0;}}
+@keyframes notifModalOut  {from{opacity:1;transform:scale(1);}to{opacity:0;transform:scale(.93);}}
+
+/* ── Shared inner components (used by BOTH desktop dropdown & mobile modal) ── */
 .notif-header{
   padding:14px 16px;border-bottom:1px solid var(--glass-border);
   display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
 }
-.notif-header-title{font-family:var(--font-mono);font-size:.72rem;font-weight:700;color:var(--yellow);text-transform:uppercase;letter-spacing:.1em;}
+.notif-header-title{
+  font-family:var(--font-mono);font-size:.72rem;font-weight:700;
+  color:var(--yellow);text-transform:uppercase;letter-spacing:.1em;
+}
 .notif-header-count{font-size:.65rem;color:var(--text-muted);font-family:var(--font-mono);}
-.notif-list{max-height:280px;overflow-y:auto;}
+
+/* Close button — visible inside mobile modal header */
+.notif-close-btn{
+  display:none;                 /* hidden on desktop */
+  width:28px;height:28px;
+  border-radius:7px;background:var(--glass);border:1px solid var(--glass-border);
+  color:var(--text-dim);cursor:pointer;font-size:.75rem;
+  align-items:center;justify-content:center;
+  flex-shrink:0;transition:var(--transition-fast);
+  -webkit-tap-highlight-color:transparent;
+}
+.notif-close-btn:hover{background:var(--yellow-dim);color:var(--yellow);}
+
+.notif-list{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  /* cap so desktop dropdown doesn't grow too tall */
+  max-height:300px;
+}
+/* In modal the list can scroll up to the card max-height */
+.notif-modal-card .notif-list{max-height:none;}
+
 .notif-item{
   display:flex;align-items:center;gap:10px;
-  padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.04);
+  padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.04);
   transition:background .15s;cursor:default;
 }
 .notif-item:last-child{border-bottom:none;}
 .notif-item.active-highlight{background:var(--yellow-dim);}
 .notif-item-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-.notif-item-dot.high{background:var(--yellow);box-shadow:0 0 8px var(--yellow-glow);}
+.notif-item-dot.high  {background:var(--yellow);box-shadow:0 0 8px var(--yellow-glow);}
 .notif-item-dot.medium{background:#FFA500;}
-.notif-item-dot.low{background:var(--text-muted);}
-.notif-item-dot.done{background:var(--green);}
-.notif-item-text{flex:1;font-size:.82rem;line-height:1.3;}
+.notif-item-dot.low   {background:var(--text-muted);}
+.notif-item-dot.done  {background:var(--green);}
+.notif-item-text{flex:1;font-size:.85rem;line-height:1.4;min-width:0;word-break:break-word;}
 .notif-item-text.done{text-decoration:line-through;color:var(--text-muted);}
-.notif-item-meta{font-size:.6rem;color:var(--text-muted);font-family:var(--font-mono);white-space:nowrap;}
-.notif-empty{padding:24px;text-align:center;color:var(--text-muted);font-size:.82rem;}
-.notif-empty i{display:block;font-size:1.4rem;margin-bottom:8px;opacity:.4;}
+.notif-item-meta{font-size:.6rem;color:var(--text-muted);font-family:var(--font-mono);white-space:nowrap;flex-shrink:0;}
+.notif-empty{padding:32px 24px;text-align:center;color:var(--text-muted);font-size:.85rem;}
+.notif-empty i{display:block;font-size:1.6rem;margin-bottom:10px;opacity:.38;}
 .notif-footer{
   padding:10px 16px;border-top:1px solid var(--glass-border);
-  font-size:.7rem;color:var(--text-muted);text-align:center;font-family:var(--font-mono);
+  font-size:.7rem;color:var(--text-muted);text-align:center;
+  font-family:var(--font-mono);flex-shrink:0;
 }
-.notif-wrapper{position:relative;}
+
+/* ── Mobile breakpoint: switch to modal behaviour ── */
+@media(max-width:768px){
+  /* Hide the desktop dropdown entirely on mobile */
+  .notif-dropdown{display:none !important;}
+
+  /* Show the X close button inside the modal header */
+  .notif-close-btn{display:flex;}
+
+  /* Slightly larger touch targets inside modal */
+  .notif-item{padding:14px 18px;}
+  .notif-item-text{font-size:.88rem;}
+
+  /* Wider modal on small phones */
+  .notif-modal-card{max-width:100%;}
+}
 
 /* ── FIREBASE SYNC INDICATOR ── */
 #sync-indicator{
@@ -1636,6 +1751,28 @@ textarea.form-input{resize:vertical;min-height:96px;line-height:1.65;}
 
 <!-- FAB backdrop -->
 <div class="fab-backdrop" id="fab-backdrop" onclick="closeFabMenu()"></div>
+
+<!-- ══ NOTIFICATION MODAL (mobile-centered popup) ══
+     Separate from the topbar wrapper so it has no
+     positional inheritance from the topbar/wrapper.
+     Entirely controlled by CSS + the JS below.      -->
+<div class="notif-modal-overlay" id="notif-modal-overlay" role="dialog" aria-modal="true" aria-label="Today's Tasks">
+  <div class="notif-modal-card" id="notif-modal-card">
+    <div class="notif-header">
+      <span class="notif-header-title">
+        <i class="fas fa-calendar-day" style="margin-right:6px;"></i>Today's Tasks
+      </span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="notif-header-count" id="notif-modal-summary">—</span>
+        <button class="notif-close-btn" id="notif-modal-close" onclick="closeNotifModal()" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="notif-list" id="notif-modal-list"></div>
+    <div class="notif-footer" id="notif-modal-footer">Showing today's assignments</div>
+  </div>
+</div>
 
 <!-- FAB quick-action menu -->
 <div class="fab-menu" id="fab-menu">
@@ -1961,53 +2098,61 @@ function updateStreakDisplay() {
 
 // ═══════════════════════════════════════════════
 // NOTIFICATION BELL SYSTEM
+// Dual-mode: desktop → anchored dropdown
+//            mobile  → centered full-screen modal
+// Zero Firebase interaction — purely UI state.
 // ═══════════════════════════════════════════════
 let _notifRotateInterval = null;
-let _notifCurrentIdx = 0;
-let _notifOpen = false;
+let _notifCurrentIdx     = 0;
+let _notifOpen           = false;
 
+/* ── Helper: is the viewport currently "mobile"? ── */
+function _isMobileViewport() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
+/* ── Collect today's tasks from existing appState (no data layer change) ── */
 function getTodayTasks() {
-  const today = new Date();
+  const today    = new Date();
   const todayStr = today.toDateString();
-  const todayISO = today.toISOString().split('T')[0];
 
-  // Gather: tasks due today, categorised Today, or overdue
   const todayTasks = appState.tasks.filter(t => {
     if (t.dueDate) {
-      return new Date(t.dueDate).toDateString() === todayStr || new Date(t.dueDate) < today;
+      return new Date(t.dueDate).toDateString() === todayStr
+          || new Date(t.dueDate) < today;
     }
     return t.category === 'Today';
   });
 
-  // Also include high-priority undone tasks
-  const highPriority = appState.tasks.filter(t => !t.completed && t.priority === 'high' && !todayTasks.find(x => x.id === t.id));
+  // Also surface undone high-priority tasks not already in the list
+  const highPriority = appState.tasks.filter(
+    t => !t.completed && t.priority === 'high'
+      && !todayTasks.find(x => x.id === t.id)
+  );
   return [...todayTasks, ...highPriority];
 }
 
+/* ── Update the bell badge state ── */
 function updateNotifBell() {
-  const btn = document.getElementById('notif-btn');
+  const btn   = document.getElementById('notif-btn');
   const badge = document.getElementById('notif-badge');
   if (!btn || !badge) return;
 
-  const allTodayTasks = getTodayTasks();
-  const pending = allTodayTasks.filter(t => !t.completed);
-  const done = allTodayTasks.filter(t => t.completed);
+  const all     = getTodayTasks();
+  const pending = all.filter(t => !t.completed);
 
-  if (allTodayTasks.length === 0) {
-    // No tasks at all
+  if (!all.length) {
     badge.style.display = 'none';
     btn.classList.remove('all-done');
     return;
   }
 
-  if (pending.length === 0) {
-    // All tasks done — green state
+  if (!pending.length) {
     btn.classList.add('all-done');
     badge.style.display = 'flex';
     badge.classList.add('green');
     badge.textContent = '✓';
   } else {
-    // Has pending tasks
     btn.classList.remove('all-done');
     badge.classList.remove('green');
     badge.style.display = 'flex';
@@ -2015,73 +2160,72 @@ function updateNotifBell() {
   }
 }
 
-function renderNotifList() {
-  const list = document.getElementById('notif-list');
-  const summary = document.getElementById('notif-summary');
-  const footer = document.getElementById('notif-footer');
-  if (!list) return;
+/* ── Build the task list HTML (shared by both dropdown and modal) ── */
+function _buildNotifListHTML() {
+  const all     = getTodayTasks();
+  const pending = all.filter(t => !t.completed);
+  const done    = all.filter(t =>  t.completed);
 
-  const allTodayTasks = getTodayTasks();
-  const pending = allTodayTasks.filter(t => !t.completed);
-  const done = allTodayTasks.filter(t => t.completed);
-
-  if (summary) {
-    summary.textContent = `${done.length}/${allTodayTasks.length} done`;
+  if (!all.length) {
+    return {
+      listHTML   : `<div class="notif-empty"><i class="fas fa-check-circle"></i>No tasks scheduled for today</div>`,
+      summaryText: '—',
+      footerText : "You're all clear! 🎉"
+    };
   }
 
-  if (!allTodayTasks.length) {
-    list.innerHTML = `<div class="notif-empty"><i class="fas fa-check-circle"></i>No tasks scheduled for today</div>`;
-    if (footer) footer.textContent = 'You\'re all clear!';
-    return;
-  }
-
-  let html = '';
-  allTodayTasks.forEach((t, i) => {
-    const isOverdue = t.dueDate && new Date(t.dueDate) < new Date() && !t.completed;
+  const today = new Date();
+  let listHTML = '';
+  all.forEach((t, i) => {
+    const isOverdue = t.dueDate && new Date(t.dueDate) < today && !t.completed;
     const metaLabel = isOverdue ? 'OVERDUE' : (t.category || '');
     const metaColor = isOverdue ? 'color:var(--red)' : '';
-    html += `<div class="notif-item" id="notif-item-${i}">
+    const titleStr  = t.title.length > 42 ? t.title.substring(0, 39) + '…' : t.title;
+    listHTML += `<div class="notif-item" id="notif-item-${i}">
       <div class="notif-item-dot ${t.completed ? 'done' : (t.priority || 'low')}"></div>
-      <span class="notif-item-text ${t.completed ? 'done' : ''}">${t.title.length > 38 ? t.title.substring(0,35)+'…' : t.title}</span>
+      <span class="notif-item-text ${t.completed ? 'done' : ''}">${titleStr}</span>
       <span class="notif-item-meta" style="${metaColor}">${metaLabel}</span>
     </div>`;
   });
 
-  list.innerHTML = html;
-
-  if (footer) {
-    if (pending.length === 0) {
-      footer.textContent = '🎉 All tasks completed!';
-    } else {
-      footer.textContent = `${pending.length} task${pending.length > 1 ? 's' : ''} remaining`;
-    }
-  }
+  return {
+    listHTML,
+    summaryText: `${done.length}/${all.length} done`,
+    footerText : pending.length === 0
+      ? '🎉 All tasks completed!'
+      : `${pending.length} task${pending.length > 1 ? 's' : ''} remaining`
+  };
 }
 
-function startNotifRotation() {
-  if (_notifRotateInterval) clearInterval(_notifRotateInterval);
-  const allTodayTasks = getTodayTasks();
-  const pending = allTodayTasks.filter(t => !t.completed);
-  if (pending.length < 2) return; // No need to cycle with 0 or 1
+/* ── Inject content into a pair of (listEl, summaryEl, footerEl) ── */
+function _populateNotifElements(listEl, summaryEl, footerEl) {
+  const { listHTML, summaryText, footerText } = _buildNotifListHTML();
+  if (listEl)    listEl.innerHTML    = listHTML;
+  if (summaryEl) summaryEl.textContent = summaryText;
+  if (footerEl)  footerEl.textContent  = footerText;
+}
+
+/* ── Cycling highlight (runs in both modes) ── */
+function startNotifRotation(containerSelector) {
+  stopNotifRotation();
+  const all     = getTodayTasks();
+  const pending = all.filter(t => !t.completed);
+  if (pending.length < 2) return;
 
   _notifCurrentIdx = 0;
 
   function highlight() {
-    // Find index of pending[_notifCurrentIdx] in full list
     const pendingItem = pending[_notifCurrentIdx];
-    const fullIdx = allTodayTasks.findIndex(t => t.id === pendingItem.id);
-
+    const fullIdx     = all.findIndex(t => t.id === pendingItem.id);
     document.querySelectorAll('.notif-item').forEach(el => el.classList.remove('active-highlight'));
     const target = document.getElementById(`notif-item-${fullIdx}`);
     if (target) {
       target.classList.add('active-highlight');
       target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
-
     _notifCurrentIdx = (_notifCurrentIdx + 1) % pending.length;
   }
-
-  highlight(); // Immediately highlight first
+  highlight();
   _notifRotateInterval = setInterval(highlight, 5000);
 }
 
@@ -2090,29 +2234,122 @@ function stopNotifRotation() {
   document.querySelectorAll('.notif-item').forEach(el => el.classList.remove('active-highlight'));
 }
 
-function toggleNotifDropdown() {
+/* ══════════════════════════
+   DESKTOP MODE — dropdown
+   ══════════════════════════ */
+function _openDesktopDropdown() {
   const dropdown = document.getElementById('notif-dropdown');
   if (!dropdown) return;
+  _populateNotifElements(
+    document.getElementById('notif-list'),
+    document.getElementById('notif-summary'),
+    document.getElementById('notif-footer')
+  );
+  dropdown.style.display = 'block';
+  startNotifRotation();
+}
 
-  _notifOpen = !_notifOpen;
-  dropdown.style.display = _notifOpen ? 'block' : 'none';
+function _closeDesktopDropdown() {
+  const dropdown = document.getElementById('notif-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+  stopNotifRotation();
+}
 
-  if (_notifOpen) {
-    renderNotifList();
-    startNotifRotation();
-  } else {
+/* ══════════════════════════
+   MOBILE MODE — centered modal
+   ══════════════════════════ */
+function _openMobileModal() {
+  const overlay = document.getElementById('notif-modal-overlay');
+  const card    = document.getElementById('notif-modal-card');
+  if (!overlay || !card) return;
+
+  _populateNotifElements(
+    document.getElementById('notif-modal-list'),
+    document.getElementById('notif-modal-summary'),
+    document.getElementById('notif-modal-footer')
+  );
+
+  // Remove any leftover closing class
+  overlay.classList.remove('closing');
+  card.classList.remove('closing');
+
+  overlay.classList.add('active');
+
+  // Lock body scroll while modal is open
+  document.body.style.overflow = 'hidden';
+
+  startNotifRotation();
+}
+
+function closeNotifModal() {
+  const overlay = document.getElementById('notif-modal-overlay');
+  const card    = document.getElementById('notif-modal-card');
+  if (!overlay || !_notifOpen) return;
+
+  // Play out-animation then hide
+  overlay.classList.add('closing');
+  card.classList.add('closing');
+
+  setTimeout(() => {
+    overlay.classList.remove('active', 'closing');
+    card.classList.remove('closing');
+    document.body.style.overflow = '';
     stopNotifRotation();
+    _notifOpen = false;
+  }, 210); // matches animation duration
+}
+
+/* ══════════════════════════
+   UNIFIED TOGGLE — called by onclick
+   ══════════════════════════ */
+function toggleNotifDropdown() {
+  if (_notifOpen) {
+    // Close whichever is currently open
+    if (_isMobileViewport()) {
+      closeNotifModal();        // handles its own _notifOpen = false
+    } else {
+      _closeDesktopDropdown();
+      _notifOpen = false;
+    }
+    return;
+  }
+
+  // Open
+  _notifOpen = true;
+  if (_isMobileViewport()) {
+    _openMobileModal();
+  } else {
+    _openDesktopDropdown();
   }
 }
 
-// Close notif dropdown when clicking outside
+/* ── Close desktop dropdown when clicking outside the wrapper ── */
 document.addEventListener('click', e => {
+  if (_isMobileViewport()) return; // mobile handled by overlay click
   const wrapper = document.getElementById('notif-wrapper');
   if (wrapper && !wrapper.contains(e.target) && _notifOpen) {
+    _closeDesktopDropdown();
     _notifOpen = false;
-    const dropdown = document.getElementById('notif-dropdown');
-    if (dropdown) dropdown.style.display = 'none';
-    stopNotifRotation();
+  }
+});
+
+/* ── Close mobile modal when tapping the dim overlay (outside card) ── */
+document.getElementById('notif-modal-overlay')?.addEventListener('click', e => {
+  // Only close if the tap landed on the overlay itself, not the card
+  if (e.target === document.getElementById('notif-modal-overlay')) {
+    closeNotifModal();
+  }
+});
+
+/* ── Close on Escape key ── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _notifOpen) {
+    if (_isMobileViewport()) {
+      closeNotifModal();
+    } else {
+      _closeDesktopDropdown();
+      _notifOpen = false;
+    }
   }
 });
 
