@@ -4545,50 +4545,195 @@ let currentSection = 'home';
 window.currentSection = currentSection;
 window.appState = appState;
 // ═══════════════════════════════════════════════
-// GOD ZONE MODULE — Isolated Spiritual Journal
-// Storage key prefix: gz_
-// Three modules: prayers, speaks, obedience
+// GOD ZONE MODULE — Firebase-Synced Spiritual Journal
+// Single source of truth: Firestore subcollection
+//   users/{userId}/godzone/data
+// localStorage used ONLY as migration source (one-time)
 // ═══════════════════════════════════════════════
 const GodZone = (() => {
+
+  // Legacy localStorage keys — read-once for migration, never written after
   const LS_PRAYERS   = 'gz_prayers';
   const LS_SPEAKS    = 'gz_speaks';
   const LS_OBEDIENCE = 'gz_obedience';
   const LS_VIEW      = 'gz_view';
+  const LS_MIGRATED  = 'gz_migrated_to_firebase'; // flag: set after migration
 
-  // ── State ──
+  // ── In-memory state ──
   let _prayers   = [];
   let _speaks    = [];
   let _obedience = [];
   let _tab       = 'prayers';
-  let _view      = 'cards'; // cards | timeline
+  let _synced    = false;     // true once at least one Firebase round-trip succeeded
+  let _saving    = false;     // debounce guard
+  let _saveTimer = null;
+  let _unsubGZ   = null;      // Firestore onSnapshot unsubscribe handle
+  let _isApplyingRemote = false; // loop guard
 
-  // ── Load / Save ──
-  function load() {
+  // ── Firebase refs (populated after SDK is ready) ──
+  function _gzDocRef() {
+    if (!window.db || typeof window.getUserId !== 'function') return null;
     try {
-      _prayers   = JSON.parse(localStorage.getItem(LS_PRAYERS)  || '[]');
-      _speaks    = JSON.parse(localStorage.getItem(LS_SPEAKS)   || '[]');
-      _obedience = JSON.parse(localStorage.getItem(LS_OBEDIENCE)|| '[]');
-      _view      = localStorage.getItem(LS_VIEW) || 'cards';
-    } catch(e) { _prayers=[]; _speaks=[]; _obedience=[]; }
+      const { doc } = window._firestoreHelpers || {};
+      if (!doc) return null;
+      return doc(window.db, 'users', window.getUserId(), 'godzone', 'data');
+    } catch(e) { return null; }
   }
 
-  function save() {
+  // ── Helpers ──
+  function uid() { return Math.random().toString(36).substr(2,9)+Date.now().toString(36); }
+  function fmtDate(ts) {
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  }
+
+  // ══════════════════════════════════
+  // MIGRATION — localStorage → Firebase
+  // Runs once if Firebase is empty AND localStorage has data.
+  // After push, clears legacy localStorage keys.
+  // ══════════════════════════════════
+  async function migrateLocalToFirebase() {
+    if (localStorage.getItem(LS_MIGRATED)) return; // already done
+
+    let localPrayers   = [];
+    let localSpeaks    = [];
+    let localObedience = [];
     try {
-      localStorage.setItem(LS_PRAYERS,   JSON.stringify(_prayers));
-      localStorage.setItem(LS_SPEAKS,    JSON.stringify(_speaks));
-      localStorage.setItem(LS_OBEDIENCE, JSON.stringify(_obedience));
-      localStorage.setItem(LS_VIEW, _view);
-    } catch(e) {}
-    // Sync to Firebase if available
-    if (typeof window.debouncedFirebaseSave === 'function') {
-      try {
-        const fs = window.appState || {};
-        fs.gz_prayers   = _prayers;
-        fs.gz_speaks    = _speaks;
-        fs.gz_obedience = _obedience;
-        window.debouncedFirebaseSave(fs);
-      } catch(e) {}
+      localPrayers   = JSON.parse(localStorage.getItem(LS_PRAYERS)  || '[]');
+      localSpeaks    = JSON.parse(localStorage.getItem(LS_SPEAKS)   || '[]');
+      localObedience = JSON.parse(localStorage.getItem(LS_OBEDIENCE)|| '[]');
+    } catch(e) { return; }
+
+    const hasLocalData = localPrayers.length || localSpeaks.length || localObedience.length;
+    if (!hasLocalData) {
+      localStorage.setItem(LS_MIGRATED, '1');
+      return;
     }
+
+    // Only migrate if Firebase is currently empty
+    if (_prayers.length || _speaks.length || _obedience.length) {
+      // Firebase already has data — don't overwrite
+      localStorage.setItem(LS_MIGRATED, '1');
+      _clearLegacyLS();
+      return;
+    }
+
+    console.log('[GodZone] Migrating localStorage → Firebase...');
+    _prayers   = localPrayers;
+    _speaks    = localSpeaks;
+    _obedience = localObedience;
+
+    await _pushToFirebase();
+    localStorage.setItem(LS_MIGRATED, '1');
+    _clearLegacyLS();
+    console.log('[GodZone] Migration complete.');
+  }
+
+  function _clearLegacyLS() {
+    localStorage.removeItem(LS_PRAYERS);
+    localStorage.removeItem(LS_SPEAKS);
+    localStorage.removeItem(LS_OBEDIENCE);
+    localStorage.removeItem(LS_VIEW);
+  }
+
+  // ══════════════════════════════════
+  // FIREBASE I/O
+  // ══════════════════════════════════
+
+  // Push current in-memory state to Firestore (debounced)
+  function save() {
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => _pushToFirebase(), 600);
+  }
+
+  async function _pushToFirebase() {
+    const ref = _gzDocRef();
+    if (!ref) {
+      console.warn('[GodZone] Firebase not ready — save deferred.');
+      return;
+    }
+    if (_saving) return;
+    _saving = true;
+    try {
+      const { setDoc, serverTimestamp } = window._firestoreHelpers || {};
+      if (!setDoc) { _saving = false; return; }
+      await setDoc(ref, {
+        prayers:   _prayers,
+        speaks:    _speaks,
+        obedience: _obedience,
+        updatedAt: serverTimestamp ? serverTimestamp() : Date.now()
+      }, { merge: true });
+      _synced = true;
+    } catch(err) {
+      console.error('[GodZone] Firebase write error:', err);
+    } finally {
+      _saving = false;
+    }
+  }
+
+  // Load from Firestore once (initial fetch)
+  async function loadGodZone() {
+    const ref = _gzDocRef();
+    if (!ref) return;
+    try {
+      const { getDoc } = window._firestoreHelpers || {};
+      if (!getDoc) return;
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const d = snap.data();
+        _prayers   = Array.isArray(d.prayers)   ? d.prayers   : [];
+        _speaks    = Array.isArray(d.speaks)     ? d.speaks    : [];
+        _obedience = Array.isArray(d.obedience)  ? d.obedience : [];
+        _synced = true;
+      }
+      // After initial load, attempt one-time migration if Firebase was empty
+      await migrateLocalToFirebase();
+    } catch(err) {
+      console.error('[GodZone] loadGodZone error:', err);
+    }
+  }
+
+  // Real-time listener — auto-updates UI on remote changes
+  function syncGodZone() {
+    if (_unsubGZ) _unsubGZ(); // detach old listener
+    const ref = _gzDocRef();
+    if (!ref) return;
+    const { onSnapshot } = window._firestoreHelpers || {};
+    if (!onSnapshot) return;
+
+    _unsubGZ = onSnapshot(ref, (snap) => {
+      if (_isApplyingRemote) return; // loop guard
+      if (!snap.exists()) return;
+      const d = snap.data();
+      _isApplyingRemote = true;
+      _prayers   = Array.isArray(d.prayers)   ? d.prayers   : [];
+      _speaks    = Array.isArray(d.speaks)     ? d.speaks    : [];
+      _obedience = Array.isArray(d.obedience)  ? d.obedience : [];
+      _synced = true;
+      // Re-render only if God Zone is the active section
+      if (typeof window.currentSection !== 'undefined' && window.currentSection === 'godzone') {
+        const content = document.getElementById('content');
+        if (content) GodZone.render(content);
+      }
+      setTimeout(() => { _isApplyingRemote = false; }, 300);
+    }, (err) => {
+      console.error('[GodZone] onSnapshot error:', err);
+    });
+  }
+
+  // ══════════════════════════════════
+  // PUBLIC BOOT — called when God Zone section is first opened
+  // Ensures data is loaded before render
+  // ══════════════════════════════════
+  async function boot() {
+    if (!_synced) {
+      await loadGodZone();
+    }
+    syncGodZone(); // attach (or re-attach) real-time listener
   }
 
   // ── Helpers ──
@@ -4634,8 +4779,26 @@ const GodZone = (() => {
   }
 
   // ═══════════════ RENDER ═══════════════
+  // render() is async-aware: boots Firebase, then renders.
+  // If data is already cached, renders immediately.
   function render(el) {
-    load();
+    if (!_synced) {
+      // Show loading shimmer while Firebase is being contacted
+      el.innerHTML = `<div class="gz-wrap"><div style="text-align:center;padding:60px 20px;color:var(--gz-text-muted);font-style:italic;font-size:.9rem;">
+        <span style="font-size:2rem;display:block;margin-bottom:12px;animation:gzIconFloat 2s ease-in-out infinite;">🕊️</span>
+        Loading God Zone…</div></div>`;
+      boot().then(() => {
+        if (typeof window.currentSection !== 'undefined' && window.currentSection === 'godzone') {
+          const content = document.getElementById('content');
+          if (content) _doRender(content);
+        }
+      });
+      return;
+    }
+    _doRender(el);
+  }
+
+  function _doRender(el) {
     const todayC = getTodayCounts();
     const streak = calcStreak();
     const noActivity = !hasActivityToday();
@@ -5014,8 +5177,9 @@ const GodZone = (() => {
     });
   }
 
-  // Public API
-  return { render, switchTab, toggleForm, savePrayer, saveSpeaks, saveObedience, cyclePrayerStatus, deletePrayer, deleteSpeaks, deleteObedience };
+  // Public API — includes new Firebase sync functions
+  return { render, switchTab, toggleForm, savePrayer, saveSpeaks, saveObedience, cyclePrayerStatus, deletePrayer, deleteSpeaks, deleteObedience,
+           loadGodZone, syncGodZone, migrateLocalToFirebase, boot };
 })();
 
 window.GodZone = GodZone;
@@ -9696,7 +9860,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // [FIREBASE SETUP] — SDK imports + initialization
 // ═══════════════════════════════════════════════
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp }
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp, deleteDoc, collection, getDocs, updateDoc }
   from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -9714,12 +9878,13 @@ const db  = getFirestore(app);
 // Expose globally so legacy saveState() can call firebase helpers
 window.db = db;
 
+// ── Expose Firestore helpers for GodZone and other modules ──
+window._firestoreHelpers = { doc, setDoc, getDoc, onSnapshot, serverTimestamp, deleteDoc, collection, getDocs, updateDoc };
+
 // ═══════════════════════════════════════════════
 // [USER IDENTIFICATION] — stable anonymous userId
 // ═══════════════════════════════════════════════
 function getUserId() {
-  // Fixed shared ID — all your devices sync to the same Firestore document.
-  // Change 'mario_main_user' to any private string only you know.
   return 'mario_main_user';
 }
 window.getUserId = getUserId;
@@ -9755,7 +9920,6 @@ async function saveToFirebase(state) {
     setSyncStatus('syncing', 'Syncing…');
     const userId = getUserId();
 
-    // Collect all keys saved to localStorage
     const keys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
                   'habits','learningCategories','calendar','settings'];
     const payload = {};
@@ -9781,7 +9945,6 @@ async function saveToFirebase(state) {
 }
 window.saveToFirebase = saveToFirebase;
 
-// Debounced wrapper — call this from saveState() with 1.5s delay
 function debouncedFirebaseSave(state) {
   if (_saveDebounceTimer) clearTimeout(_saveDebounceTimer);
   _saveDebounceTimer = setTimeout(() => saveToFirebase(state), 1500);
@@ -9811,10 +9974,10 @@ window.loadFromFirebase = loadFromFirebase;
 // [REALTIME SYNC] — onSnapshot live listener
 // ═══════════════════════════════════════════════
 let _unsubscribeSnapshot = null;
-let _isApplyingRemote    = false;  // guard against re-save loops
+let _isApplyingRemote    = false;
 
 function listenToFirebase() {
-  if (_unsubscribeSnapshot) _unsubscribeSnapshot();   // clean old listener
+  if (_unsubscribeSnapshot) _unsubscribeSnapshot();
 
   const userId = getUserId();
   _unsubscribeSnapshot = onSnapshot(
@@ -9824,7 +9987,6 @@ function listenToFirebase() {
       const { data } = snap.data();
       if (!data) return;
 
-      // Merge remote data into appState without overwriting if we triggered it
       if (_isApplyingRemote) return;
       _isApplyingRemote = true;
 
@@ -9838,7 +10000,6 @@ function listenToFirebase() {
       if (data.dailyStreak      !== undefined) window.appState.dailyStreak      = data.dailyStreak;
       if (data.lastActivityDate !== undefined) window.appState.lastActivityDate = data.lastActivityDate;
 
-      // Persist locally too
       const lsKeys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
                       'habits','learningCategories','calendar','settings'];
       lsKeys.forEach(k => localStorage.setItem('mlos_' + k, JSON.stringify(window.appState[k])));
@@ -9847,7 +10008,6 @@ function listenToFirebase() {
       localStorage.setItem('mlos_dailyStreak',      window.appState.dailyStreak);
       localStorage.setItem('mlos_lastActivityDate', window.appState.lastActivityDate);
 
-      // Re-render current section
       if (typeof window.renderSection === 'function' && typeof window.currentSection !== 'undefined') {
         window.renderSection(window.currentSection);
       }
@@ -9866,20 +10026,152 @@ function listenToFirebase() {
 }
 window.listenToFirebase = listenToFirebase;
 
-// saveState() now calls debouncedFirebaseSave() directly — no patch needed.
+// ═══════════════════════════════════════════════
+// [DELETE CLIENT BY NAME] — permanent removal
+// Removes "name" from: appState.followUps,
+//   appState (coaching) clients in Firestore,
+//   localStorage, and God Zone data if referenced.
+// Also runs a sanitize pass to prevent ghost data.
+// ═══════════════════════════════════════════════
+async function deleteClientByName(name) {
+  if (!name || typeof name !== 'string') {
+    console.warn('[deleteClientByName] Invalid name:', name);
+    return;
+  }
+  const lowerName = name.trim().toLowerCase();
+
+  console.log(`[deleteClientByName] Removing "${name}" from all sources...`);
+
+  // ─── 1. Remove from appState.followUps ───
+  if (window.appState && Array.isArray(window.appState.followUps)) {
+    const before = window.appState.followUps.length;
+    window.appState.followUps = window.appState.followUps.filter(f => {
+      return (f.name || '').trim().toLowerCase() !== lowerName;
+    });
+    const removed = before - window.appState.followUps.length;
+    if (removed > 0) console.log(`[deleteClientByName] Removed ${removed} follow-up(s).`);
+  }
+
+  // ─── 2. Remove from localStorage (all relevant keys) ───
+  try {
+    ['followUps','tasks','notes','goals'].forEach(key => {
+      const raw = localStorage.getItem('mlos_' + key);
+      if (!raw) return;
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return;
+      const filtered = arr.filter(item => {
+        const itemName = (item.name || item.title || item.client || '').trim().toLowerCase();
+        return itemName !== lowerName;
+      });
+      if (filtered.length !== arr.length) {
+        localStorage.setItem('mlos_' + key, JSON.stringify(filtered));
+        console.log(`[deleteClientByName] Cleaned localStorage key: mlos_${key}`);
+      }
+    });
+  } catch(e) {
+    console.error('[deleteClientByName] localStorage cleanup error:', e);
+  }
+
+  // ─── 3. Remove from Firestore coaching clients collection ───
+  try {
+    const userId = getUserId();
+    // Try the coaching-app's clients collection
+    const clientsSnap = await getDocs(collection(db, 'clients'));
+    const deletePromises = [];
+    clientsSnap.forEach(clientDoc => {
+      const data = clientDoc.data();
+      if ((data.name || '').trim().toLowerCase() === lowerName) {
+        console.log(`[deleteClientByName] Deleting Firestore client: ${clientDoc.id}`);
+        // Also delete the data subcollection
+        deletePromises.push(
+          deleteDoc(doc(db, 'clients', clientDoc.id, 'data', 'session')).catch(() => {})
+        );
+        deletePromises.push(deleteDoc(doc(db, 'clients', clientDoc.id)));
+      }
+    });
+    if (deletePromises.length) await Promise.all(deletePromises);
+  } catch(e) {
+    console.error('[deleteClientByName] Firestore clients cleanup error:', e);
+  }
+
+  // ─── 4. Remove from Firestore main user document (followUps array) ───
+  try {
+    await saveToFirebase(window.appState);
+  } catch(e) {
+    console.error('[deleteClientByName] Firestore user doc update error:', e);
+  }
+
+  // ─── 5. Clean coaching calls from localStorage ───
+  try {
+    const CALLS_KEY = 'coaching_upcoming_calls_v1';
+    const calls = JSON.parse(localStorage.getItem(CALLS_KEY) || '[]');
+    const cleaned = calls.filter(c => (c.clientName || '').trim().toLowerCase() !== lowerName);
+    if (cleaned.length !== calls.length) {
+      localStorage.setItem(CALLS_KEY, JSON.stringify(cleaned));
+      console.log(`[deleteClientByName] Removed coaching calls for "${name}".`);
+    }
+  } catch(e) {}
+
+  // ─── 6. Re-render current section if it shows affected data ───
+  if (typeof window.renderSection === 'function' && typeof window.currentSection !== 'undefined') {
+    window.renderSection(window.currentSection);
+  }
+  if (typeof window.updateBadges === 'function') window.updateBadges();
+
+  console.log(`[deleteClientByName] "${name}" fully removed from all sources.`);
+}
+window.deleteClientByName = deleteClientByName;
+
+// ═══════════════════════════════════════════════
+// [KAROL SANITIZER] — auto-removes Karol on every load
+// Safety net: even if data re-appears from cache,
+// it gets cleaned before any UI renders.
+// ═══════════════════════════════════════════════
+function sanitizeKarol() {
+  const TARGET = 'karol';
+
+  // Clean appState.followUps
+  if (window.appState && Array.isArray(window.appState.followUps)) {
+    window.appState.followUps = window.appState.followUps.filter(f =>
+      (f.name || '').trim().toLowerCase() !== TARGET
+    );
+  }
+
+  // Clean localStorage coaching calls
+  try {
+    const CALLS_KEY = 'coaching_upcoming_calls_v1';
+    const calls = JSON.parse(localStorage.getItem(CALLS_KEY) || '[]');
+    const cleaned = calls.filter(c => (c.clientName || '').trim().toLowerCase() !== TARGET);
+    if (cleaned.length !== calls.length) localStorage.setItem(CALLS_KEY, JSON.stringify(cleaned));
+  } catch(e) {}
+
+  // Clean localStorage followUps
+  try {
+    const raw = localStorage.getItem('mlos_followUps');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        const cleaned = arr.filter(f => (f.name || '').trim().toLowerCase() !== TARGET);
+        if (cleaned.length !== arr.length) localStorage.setItem('mlos_followUps', JSON.stringify(cleaned));
+      }
+    }
+  } catch(e) {}
+}
+window.sanitizeKarol = sanitizeKarol;
 
 // ═══════════════════════════════════════════════
 // [INTEGRATION POINT] — app boot with Firebase load
-// Runs after DOMContentLoaded, tries cloud first, falls back to localStorage
 // ═══════════════════════════════════════════════
 window.addEventListener('load', async () => {
   setSyncStatus('syncing', 'Loading…');
+
+  // Run Karol sanitizer FIRST — before any render
+  sanitizeKarol();
 
   try {
     const cloudData = await loadFromFirebase();
 
     if (cloudData) {
-      // Cloud data found — overwrite appState
       const keys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
                     'habits','learningCategories','calendar','settings'];
       keys.forEach(k => {
@@ -9890,14 +10182,15 @@ window.addEventListener('load', async () => {
       if (cloudData.dailyStreak      !== undefined) window.appState.dailyStreak      = cloudData.dailyStreak;
       if (cloudData.lastActivityDate !== undefined) window.appState.lastActivityDate = cloudData.lastActivityDate;
 
-      // Sync cloud → localStorage
+      // Run sanitizer again after cloud data is merged
+      sanitizeKarol();
+
       keys.forEach(k => localStorage.setItem('mlos_' + k, JSON.stringify(window.appState[k])));
       localStorage.setItem('mlos_focusSessions',    window.appState.focusSessions);
       localStorage.setItem('mlos_xp',               window.appState.xp);
       localStorage.setItem('mlos_dailyStreak',      window.appState.dailyStreak);
       localStorage.setItem('mlos_lastActivityDate', window.appState.lastActivityDate);
 
-      // Re-render with fresh cloud data
       if (typeof window.renderSection === 'function') window.renderSection(window.currentSection || 'home');
       if (typeof window.updateBadges  === 'function') window.updateBadges();
       if (typeof window.updateXPBar   === 'function') window.updateXPBar();
@@ -9905,7 +10198,6 @@ window.addEventListener('load', async () => {
 
       setSyncStatus('synced', 'Synced ✅');
     } else {
-      // No cloud data — localStorage is the source of truth, push it up
       setSyncStatus('synced', 'Synced ✅');
       await saveToFirebase(window.appState);
     }
@@ -9914,7 +10206,15 @@ window.addEventListener('load', async () => {
     setSyncStatus('offline', 'Offline ⚠️');
   }
 
-  // Start realtime listener regardless of boot outcome
+  // Perform one-time permanent Karol deletion from Firestore
+  // (runs silently in background — safe to call every load, idempotent)
+  try {
+    await deleteClientByName('Karol');
+  } catch(e) {
+    console.warn('[Karol] Permanent deletion attempt failed (non-fatal):', e);
+  }
+
+  // Start realtime listener
   try {
     listenToFirebase();
   } catch (err) {
