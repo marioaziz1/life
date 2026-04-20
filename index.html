@@ -1955,6 +1955,75 @@ textarea.form-input{resize:vertical;min-height:96px;line-height:1.65;}
 .cs-cc-next-call-badge.state-today    .cs-badge-dot { background:var(--green); box-shadow:0 0 5px var(--green); }
 .cs-cc-next-call-badge.state-late     .cs-badge-dot { background:var(--red);   box-shadow:0 0 5px var(--red); }
 
+/* ── COACHING: today-call green highlight ── */
+.cs-client-card.call-today {
+  border-color: rgba(68,255,136,.5) !important;
+  box-shadow: 0 0 0 1px rgba(68,255,136,.35), 0 4px 24px rgba(68,255,136,.12);
+}
+.cs-client-card.call-today::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(68,255,136,.06) 0%, transparent 70%);
+  pointer-events: none; border-radius: inherit;
+}
+.cs-client-card.call-today .cs-cc-avatar {
+  background: var(--green);
+  box-shadow: 0 0 12px rgba(68,255,136,.5);
+}
+
+/* ── COACHING: call-now notification banner ── */
+#cs-call-now-banner {
+  position: fixed; top: calc(var(--topbar-h) + 8px); right: 16px;
+  z-index: 9999;
+  background: linear-gradient(135deg, #0d2b1a, #112918);
+  border: 1px solid rgba(68,255,136,.5);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  display: flex; align-items: center; gap: 12px;
+  min-width: 280px; max-width: 380px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55), 0 0 0 1px rgba(68,255,136,.2);
+  transform: translateX(calc(100% + 24px));
+  transition: transform .38s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+  opacity: 0;
+}
+#cs-call-now-banner.visible {
+  transform: translateX(0);
+  opacity: 1;
+}
+#cs-call-now-banner .cn-icon {
+  font-size: 1.5rem; flex-shrink: 0; animation: fabPulse 2s ease-in-out infinite;
+}
+#cs-call-now-banner .cn-body { flex: 1; min-width: 0; }
+#cs-call-now-banner .cn-title {
+  font-size: .82rem; font-weight: 700; color: var(--green); margin-bottom: 2px;
+}
+#cs-call-now-banner .cn-client {
+  font-size: .75rem; color: var(--text); font-family: var(--font-mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#cs-call-now-banner .cn-close {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: .8rem; padding: 4px; border-radius: 5px;
+  transition: color .18s; flex-shrink: 0;
+}
+#cs-call-now-banner .cn-close:hover { color: var(--green); }
+
+/* ── COACHING: notification bell call-dot indicator ── */
+#notif-btn.has-calls .fa-bell { color: var(--green); }
+.notif-call-section { border-top: 1px solid var(--glass-border); margin-top: 8px; padding-top: 8px; }
+.notif-call-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 8px;
+  background: rgba(68,255,136,.06); margin-bottom: 4px;
+  font-size: .78rem;
+}
+.notif-call-item .nci-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 5px var(--green); flex-shrink: 0;
+}
+.notif-call-item .nci-text { flex: 1; color: var(--text); }
+.notif-call-item .nci-time { font-family: var(--font-mono); font-size: .68rem; color: var(--green); }
+
 /* ── COACHING: DASHBOARD ── */
 .cs-dash-header {
   display:flex; align-items:center; gap:14px; margin-bottom:var(--sp-6); flex-wrap:wrap;
@@ -2653,6 +2722,676 @@ textarea.form-input{resize:vertical;min-height:96px;line-height:1.65;}
 }
 
 /* ══════════════════════════════════════════════
+   GOD ZONE — SPIRITUAL JOURNAL MODULE
+   Isolated, emotionally distinct, sacred in tone
+   ══════════════════════════════════════════════ */
+:root {
+  --gz-deep: #0d0b1a;
+  --gz-mid: #13102b;
+  --gz-surface: #1a1630;
+  --gz-card: rgba(26,22,55,0.85);
+  --gz-border: rgba(180,150,255,0.12);
+  --gz-border-glow: rgba(180,150,255,0.28);
+  --gz-purple: #b8a9d4;
+  --gz-purple-dim: rgba(184,169,212,0.12);
+  --gz-purple-glow: rgba(184,169,212,0.25);
+  --gz-gold: #e8c97a;
+  --gz-gold-dim: rgba(232,201,122,0.1);
+  --gz-gold-glow: rgba(232,201,122,0.3);
+  --gz-green: #7ec8a0;
+  --gz-green-dim: rgba(126,200,160,0.1);
+  --gz-blue: #a8c4e8;
+  --gz-text: #d4cce8;
+  --gz-text-dim: #8a829a;
+  --gz-text-muted: #5a5268;
+  --gz-shadow: 0 8px 32px rgba(10,8,24,0.7);
+  --gz-shadow-glow: 0 4px 28px rgba(130,100,200,0.2);
+  --gz-radius: 16px;
+  --gz-radius-sm: 10px;
+  --gz-transition: all .32s cubic-bezier(.4,0,.2,1);
+}
+
+/* ── GOD ZONE WRAPPER ── */
+.gz-wrap {
+  min-height: 100%;
+  background: linear-gradient(160deg, var(--gz-deep) 0%, #0f0d22 40%, #0b1025 100%);
+  border-radius: var(--radius);
+  padding: var(--sp-6);
+  position: relative;
+  overflow: hidden;
+}
+.gz-wrap::before {
+  content: '';
+  position: absolute;
+  top: -200px;
+  right: -200px;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(130,90,200,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.gz-wrap::after {
+  content: '';
+  position: absolute;
+  bottom: -150px;
+  left: -100px;
+  width: 500px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(80,120,200,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ── GOD ZONE HEADER ── */
+.gz-header {
+  text-align: center;
+  padding: var(--sp-8) 0 var(--sp-6);
+  position: relative;
+  z-index: 1;
+}
+.gz-header-icon {
+  font-size: 2.4rem;
+  margin-bottom: var(--sp-3);
+  filter: drop-shadow(0 0 18px rgba(184,169,212,0.4));
+  animation: gzIconFloat 4s ease-in-out infinite;
+  display: block;
+}
+@keyframes gzIconFloat {
+  0%,100% { transform: translateY(0); opacity: 1; }
+  50%      { transform: translateY(-6px); opacity: .85; }
+}
+.gz-header-title {
+  font-family: var(--font);
+  font-size: clamp(1.3rem, 3vw, 1.7rem);
+  font-weight: 300;
+  letter-spacing: .18em;
+  color: var(--gz-purple);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.gz-header-subtitle {
+  font-size: var(--text-sm);
+  color: var(--gz-text-dim);
+  font-weight: 300;
+  letter-spacing: .04em;
+  font-style: italic;
+}
+.gz-divider {
+  width: 100%;
+  max-width: 320px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gz-border-glow), transparent);
+  margin: var(--sp-5) auto;
+}
+
+/* ── DAILY SUMMARY STRIP ── */
+.gz-daily-summary {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-6);
+  position: relative;
+  z-index: 1;
+}
+.gz-daily-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--gz-card);
+  border: 1px solid var(--gz-border);
+  border-radius: 40px;
+  font-size: var(--text-xs);
+  color: var(--gz-text-dim);
+  transition: var(--gz-transition);
+}
+.gz-daily-chip:hover { border-color: var(--gz-border-glow); color: var(--gz-text); }
+.gz-daily-chip strong { color: var(--gz-purple); font-family: var(--font-mono); }
+
+/* ── TAB SYSTEM ── */
+.gz-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(13,11,26,0.6);
+  border: 1px solid var(--gz-border);
+  border-radius: 14px;
+  padding: 5px;
+  margin-bottom: var(--sp-6);
+  position: relative;
+  z-index: 1;
+  flex-wrap: wrap;
+}
+.gz-tab {
+  flex: 1;
+  min-width: 100px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--gz-text-dim);
+  cursor: pointer;
+  border-radius: 10px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: var(--font);
+  transition: var(--gz-transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  letter-spacing: .02em;
+}
+.gz-tab:hover { color: var(--gz-text); background: var(--gz-purple-dim); }
+.gz-tab.active {
+  color: var(--gz-purple);
+  background: linear-gradient(135deg, rgba(130,100,200,0.18), rgba(80,120,200,0.12));
+  border: 1px solid var(--gz-border-glow);
+  box-shadow: var(--gz-shadow-glow);
+  font-weight: 600;
+}
+.gz-tab-panel { display: none; position: relative; z-index: 1; }
+.gz-tab-panel.active { display: block; animation: gzFadeIn .35s ease; }
+@keyframes gzFadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* ── SECTION SUBHEADER ── */
+.gz-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-5);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.gz-section-title {
+  font-size: var(--text-lg);
+  font-weight: 400;
+  color: var(--gz-purple);
+  letter-spacing: .06em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gz-section-title span { font-size: 1.1rem; }
+
+/* ── ADD FORM ── */
+.gz-add-form {
+  background: rgba(20,16,44,0.8);
+  border: 1px solid var(--gz-border);
+  border-radius: var(--gz-radius);
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-5);
+  display: none;
+  animation: gzFadeIn .3s ease;
+  backdrop-filter: blur(12px);
+}
+.gz-add-form.open { display: block; }
+.gz-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.gz-form-row.single { grid-template-columns: 1fr; }
+.gz-form-row.triple { grid-template-columns: 1fr 1fr 1fr; }
+@media(max-width:600px) {
+  .gz-form-row, .gz-form-row.triple { grid-template-columns: 1fr; }
+}
+.gz-label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--gz-text-dim);
+  margin-bottom: 6px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.gz-input, .gz-textarea, .gz-select {
+  width: 100%;
+  background: rgba(13,11,26,0.7);
+  border: 1px solid var(--gz-border);
+  border-radius: var(--gz-radius-sm);
+  color: var(--gz-text);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  padding: 10px 14px;
+  transition: var(--gz-transition);
+  outline: none;
+}
+.gz-input:focus, .gz-textarea:focus, .gz-select:focus {
+  border-color: var(--gz-border-glow);
+  box-shadow: 0 0 0 3px var(--gz-purple-dim);
+  background: rgba(20,16,44,0.9);
+}
+.gz-textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
+.gz-select option { background: var(--gz-mid); }
+.gz-form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: var(--sp-3);
+}
+.gz-btn {
+  padding: 9px 20px;
+  border: none;
+  border-radius: var(--gz-radius-sm);
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--gz-transition);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  letter-spacing: .02em;
+}
+.gz-btn-primary {
+  background: linear-gradient(135deg, #6b4fa8, #3d6e9e);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(107,79,168,0.35);
+}
+.gz-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(107,79,168,0.5); }
+.gz-btn-ghost {
+  background: transparent;
+  color: var(--gz-text-dim);
+  border: 1px solid var(--gz-border);
+}
+.gz-btn-ghost:hover { color: var(--gz-text); background: var(--gz-purple-dim); }
+.gz-btn-add {
+  padding: 9px 18px;
+  background: var(--gz-purple-dim);
+  color: var(--gz-purple);
+  border: 1px dashed rgba(184,169,212,0.3);
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: var(--gz-transition);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gz-btn-add:hover { background: rgba(184,169,212,0.18); border-color: var(--gz-border-glow); color: #fff; }
+
+/* ── PRAYER CARDS (sticky-note style) ── */
+.gz-prayers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: var(--sp-4);
+}
+.gz-prayer-card {
+  background: linear-gradient(145deg, rgba(28,24,52,0.9), rgba(22,18,44,0.95));
+  border: 1px solid var(--gz-border);
+  border-radius: var(--gz-radius);
+  padding: var(--sp-5);
+  position: relative;
+  overflow: hidden;
+  transition: var(--gz-transition);
+  cursor: default;
+  animation: gzFadeIn .4s ease;
+}
+.gz-prayer-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(184,169,212,0.4), transparent);
+  border-radius: var(--gz-radius) var(--gz-radius) 0 0;
+}
+.gz-prayer-card:hover {
+  border-color: var(--gz-border-glow);
+  transform: translateY(-3px) rotate(0.3deg);
+  box-shadow: var(--gz-shadow-glow), var(--gz-shadow);
+}
+.gz-prayer-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .62rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: var(--sp-3);
+  font-family: var(--font-mono);
+}
+.gz-prayer-status.pending  { background: rgba(168,196,232,0.12); color: var(--gz-blue); border: 1px solid rgba(168,196,232,0.25); }
+.gz-prayer-status.done     { background: rgba(126,200,160,0.12); color: var(--gz-green); border: 1px solid rgba(126,200,160,0.25); }
+.gz-prayer-status.answered { background: rgba(232,201,122,0.12); color: var(--gz-gold); border: 1px solid rgba(232,201,122,0.3); }
+.gz-prayer-text {
+  color: var(--gz-text);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  margin-bottom: var(--sp-3);
+  font-weight: 300;
+  font-style: italic;
+}
+.gz-prayer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gz-prayer-date {
+  font-size: .67rem;
+  color: var(--gz-text-muted);
+  font-family: var(--font-mono);
+}
+.gz-prayer-emotion {
+  font-size: .67rem;
+  color: var(--gz-text-dim);
+  background: var(--gz-purple-dim);
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--gz-border);
+}
+.gz-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: var(--sp-3);
+  padding-top: 10px;
+  border-top: 1px solid var(--gz-border);
+}
+.gz-card-btn {
+  flex: 1;
+  padding: 5px;
+  background: transparent;
+  border: 1px solid var(--gz-border);
+  border-radius: 7px;
+  color: var(--gz-text-muted);
+  font-size: .7rem;
+  cursor: pointer;
+  transition: var(--gz-transition);
+  font-family: var(--font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.gz-card-btn:hover { border-color: var(--gz-border-glow); color: var(--gz-text); background: var(--gz-purple-dim); }
+.gz-card-btn.danger:hover { border-color: rgba(255,100,100,0.3); color: #ff8888; background: rgba(255,68,68,0.08); }
+
+/* ── GOD SPEAKS CARDS (highlighted / gold glow) ── */
+.gz-speaks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
+  margin-top: var(--sp-4);
+}
+.gz-speaks-card {
+  background: linear-gradient(145deg, rgba(30,25,18,0.95), rgba(24,20,12,0.98));
+  border: 1px solid rgba(232,201,122,0.18);
+  border-radius: var(--gz-radius);
+  padding: var(--sp-5);
+  position: relative;
+  overflow: hidden;
+  transition: var(--gz-transition);
+  animation: gzFadeIn .4s ease;
+}
+.gz-speaks-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gz-gold), transparent);
+}
+.gz-speaks-card::after {
+  content: '';
+  position: absolute;
+  top: -80px; right: -80px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(232,201,122,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+.gz-speaks-card:hover {
+  border-color: rgba(232,201,122,0.38);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(180,150,80,0.2), var(--gz-shadow);
+}
+.gz-speaks-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .62rem;
+  padding: 3px 9px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: var(--sp-3);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  background: var(--gz-gold-dim);
+  color: var(--gz-gold);
+  border: 1px solid rgba(232,201,122,0.25);
+}
+.gz-speaks-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .6rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.gz-speaks-tag.peace     { background: rgba(168,196,232,0.1); color: var(--gz-blue); border: 1px solid rgba(168,196,232,0.2); }
+.gz-speaks-tag.guidance  { background: var(--gz-gold-dim); color: var(--gz-gold); border: 1px solid rgba(232,201,122,0.2); }
+.gz-speaks-tag.correction{ background: rgba(255,150,100,0.1); color: #e8a07a; border: 1px solid rgba(255,150,100,0.2); }
+.gz-speaks-tag.reminder  { background: rgba(184,169,212,0.1); color: var(--gz-purple); border: 1px solid var(--gz-border); }
+.gz-speaks-message {
+  color: var(--gz-text);
+  font-size: var(--text-base);
+  line-height: 1.75;
+  margin-bottom: var(--sp-3);
+  font-weight: 300;
+  letter-spacing: .01em;
+}
+.gz-speaks-message::before { content: '"'; color: rgba(232,201,122,0.4); font-size: 1.5em; line-height: 0; vertical-align: -0.3em; margin-right: 2px; }
+.gz-speaks-message::after  { content: '"'; color: rgba(232,201,122,0.4); font-size: 1.5em; line-height: 0; vertical-align: -0.3em; margin-left: 2px; }
+.gz-speaks-meta {
+  font-size: .67rem;
+  color: var(--gz-text-muted);
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── OBEDIENCE CARDS (green, disciplined) ── */
+.gz-obedience-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: var(--sp-4);
+}
+.gz-obedience-card {
+  background: linear-gradient(135deg, rgba(14,24,18,0.92), rgba(12,20,16,0.96));
+  border: 1px solid rgba(126,200,160,0.15);
+  border-left: 3px solid rgba(126,200,160,0.45);
+  border-radius: var(--gz-radius);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  transition: var(--gz-transition);
+  animation: gzFadeIn .4s ease;
+  position: relative;
+  overflow: hidden;
+}
+.gz-obedience-card::before {
+  content: '';
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 100px; height: 100px;
+  background: radial-gradient(circle, rgba(126,200,160,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+.gz-obedience-card:hover {
+  border-color: rgba(126,200,160,0.3);
+  border-left-color: var(--gz-green);
+  transform: translateX(3px);
+  box-shadow: -2px 0 20px rgba(126,200,160,0.12), var(--gz-shadow);
+}
+.gz-obedience-icon {
+  width: 38px; height: 38px; min-width: 38px;
+  background: rgba(126,200,160,0.1);
+  border: 1px solid rgba(126,200,160,0.25);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gz-green);
+  font-size: .9rem;
+  flex-shrink: 0;
+}
+.gz-obedience-content { flex: 1; min-width: 0; }
+.gz-obedience-action {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--gz-text);
+  margin-bottom: 5px;
+  line-height: 1.4;
+}
+.gz-obedience-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.gz-obedience-date {
+  font-size: .65rem;
+  color: var(--gz-text-muted);
+  font-family: var(--font-mono);
+}
+.gz-obedience-impact {
+  font-size: .65rem;
+  color: var(--gz-green);
+  background: var(--gz-green-dim);
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(126,200,160,0.2);
+}
+.gz-streak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .65rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--gz-green);
+  background: var(--gz-green-dim);
+  border: 1px solid rgba(126,200,160,0.25);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+/* ── TIMELINE VIEW ── */
+.gz-timeline {
+  position: relative;
+  padding-left: 24px;
+  margin-top: var(--sp-4);
+}
+.gz-timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px; top: 0; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--gz-border-glow) 20%, var(--gz-border-glow) 80%, transparent);
+}
+.gz-timeline-item {
+  position: relative;
+  margin-bottom: var(--sp-5);
+  animation: gzFadeIn .4s ease;
+}
+.gz-timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -20px; top: 14px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--gz-purple);
+  box-shadow: 0 0 8px var(--gz-purple-glow);
+}
+.gz-timeline-item.speaks::before { background: var(--gz-gold); box-shadow: 0 0 8px var(--gz-gold-glow); }
+.gz-timeline-item.obedience::before { background: var(--gz-green); box-shadow: 0 0 8px rgba(126,200,160,0.4); }
+.gz-timeline-type-badge {
+  font-size: .6rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--gz-text-muted);
+  margin-bottom: 5px;
+}
+
+/* ── EMPTY STATES ── */
+.gz-empty {
+  text-align: center;
+  padding: var(--sp-12) var(--sp-6);
+  color: var(--gz-text-muted);
+}
+.gz-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--sp-4);
+  opacity: .4;
+  display: block;
+}
+.gz-empty-text {
+  font-size: var(--text-base);
+  font-weight: 300;
+  line-height: 1.7;
+  font-style: italic;
+  letter-spacing: .02em;
+}
+
+/* ── VIEW TOGGLE ── */
+.gz-view-toggle {
+  display: flex;
+  gap: 6px;
+}
+.gz-view-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--gz-border);
+  border-radius: 8px;
+  color: var(--gz-text-muted);
+  font-size: .7rem;
+  cursor: pointer;
+  transition: var(--gz-transition);
+  font-family: var(--font);
+  display: flex; align-items: center; gap: 5px;
+}
+.gz-view-btn.active, .gz-view-btn:hover { background: var(--gz-purple-dim); border-color: var(--gz-border-glow); color: var(--gz-purple); }
+
+/* ── REMINDER BANNER ── */
+.gz-reminder-banner {
+  background: linear-gradient(135deg, rgba(107,79,168,0.12), rgba(61,110,158,0.08));
+  border: 1px solid var(--gz-border-glow);
+  border-radius: var(--gz-radius);
+  padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--text-sm);
+  color: var(--gz-text-dim);
+  position: relative; z-index:1;
+}
+.gz-reminder-icon { font-size: 1.1rem; flex-shrink: 0; }
+
+/* ── SIDEBAR NAV HOVER GLOW ── */
+#nav-godzone:hover { background: rgba(130,100,200,0.1) !important; }
+#nav-godzone.active {
+  background: linear-gradient(135deg, rgba(107,79,168,0.18), rgba(61,110,158,0.12)) !important;
+  border-right: 2px solid var(--gz-purple) !important;
+  color: var(--gz-purple) !important;
+}
+#nav-godzone.active i { color: var(--gz-purple) !important; text-shadow: 0 0 14px var(--gz-purple-glow) !important; }
+#nav-godzone.active::before { background: var(--gz-purple) !important; box-shadow: 0 0 12px var(--gz-purple-glow) !important; }
+
+/* ══════════════════════════════════════════════
    SMART DAILY NOTIFICATION BANNER
    ══════════════════════════════════════════════ */
 #ml-daily-banner {
@@ -2824,6 +3563,12 @@ textarea.form-input{resize:vertical;min-height:96px;line-height:1.65;}
         <li data-section="calendar"><i class="fas fa-calendar-alt"></i><span class="nav-label">Calendar</span></li>
         <li data-section="review"><i class="fas fa-chart-line"></i><span class="nav-label">Review</span></li>
         <li data-section="brainstorm"><i class="fas fa-project-diagram"></i><span class="nav-label">Brainstorm</span></li>
+        <div class="nav-divider"></div>
+        <li data-section="godzone" id="nav-godzone" style="color:#b8a9d4;position:relative;overflow:hidden;">
+          <i class="fas fa-dove" style="color:#b8a9d4;"></i>
+          <span class="nav-label" style="background:linear-gradient(90deg,#d4b8f5,#a8c4e8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:600;letter-spacing:.02em;">God Zone</span>
+          <span class="nav-badge" id="nb-godzone" style="display:none;background:linear-gradient(135deg,#7c5cbf,#4a7fa5);color:#fff;font-size:.55rem;">✦</span>
+        </li>
       </ul>
     </nav>
     <div class="sidebar-footer">
@@ -2870,6 +3615,16 @@ textarea.form-input{resize:vertical;min-height:96px;line-height:1.65;}
         <div class="avatar" title="Mario">M</div>
       </div>
     </header>
+
+    <!-- COACHING CALL-NOW NOTIFICATION BANNER -->
+    <div id="cs-call-now-banner" role="alert" aria-live="assertive">
+      <div class="cn-icon">📞</div>
+      <div class="cn-body">
+        <div class="cn-title">📞 Call Now!</div>
+        <div class="cn-client" id="cs-call-now-client">Client</div>
+      </div>
+      <button class="cn-close" onclick="CoachingCallNotifier.dismissBanner()" aria-label="Dismiss"><i class="fas fa-times"></i></button>
+    </div>
 
     <!-- SMART DAILY NOTIFICATION BANNER -->
     <div id="ml-daily-banner" role="alert" aria-live="polite">
@@ -3789,6 +4544,488 @@ window.NotificationSystem = NotificationSystem;
 let currentSection = 'home';
 window.currentSection = currentSection;
 window.appState = appState;
+// ═══════════════════════════════════════════════
+// GOD ZONE MODULE — Isolated Spiritual Journal
+// Storage key prefix: gz_
+// Three modules: prayers, speaks, obedience
+// ═══════════════════════════════════════════════
+const GodZone = (() => {
+  const LS_PRAYERS   = 'gz_prayers';
+  const LS_SPEAKS    = 'gz_speaks';
+  const LS_OBEDIENCE = 'gz_obedience';
+  const LS_VIEW      = 'gz_view';
+
+  // ── State ──
+  let _prayers   = [];
+  let _speaks    = [];
+  let _obedience = [];
+  let _tab       = 'prayers';
+  let _view      = 'cards'; // cards | timeline
+
+  // ── Load / Save ──
+  function load() {
+    try {
+      _prayers   = JSON.parse(localStorage.getItem(LS_PRAYERS)  || '[]');
+      _speaks    = JSON.parse(localStorage.getItem(LS_SPEAKS)   || '[]');
+      _obedience = JSON.parse(localStorage.getItem(LS_OBEDIENCE)|| '[]');
+      _view      = localStorage.getItem(LS_VIEW) || 'cards';
+    } catch(e) { _prayers=[]; _speaks=[]; _obedience=[]; }
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(LS_PRAYERS,   JSON.stringify(_prayers));
+      localStorage.setItem(LS_SPEAKS,    JSON.stringify(_speaks));
+      localStorage.setItem(LS_OBEDIENCE, JSON.stringify(_obedience));
+      localStorage.setItem(LS_VIEW, _view);
+    } catch(e) {}
+    // Sync to Firebase if available
+    if (typeof window.debouncedFirebaseSave === 'function') {
+      try {
+        const fs = window.appState || {};
+        fs.gz_prayers   = _prayers;
+        fs.gz_speaks    = _speaks;
+        fs.gz_obedience = _obedience;
+        window.debouncedFirebaseSave(fs);
+      } catch(e) {}
+    }
+  }
+
+  // ── Helpers ──
+  function uid() { return Math.random().toString(36).substr(2,9)+Date.now().toString(36); }
+  function fmtDate(ts) {
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  }
+
+  // ── Streak counter for obedience ──
+  function calcStreak() {
+    if (!_obedience.length) return 0;
+    const sorted = [..._obedience].sort((a,b)=>b.ts-a.ts);
+    const days = new Set(sorted.map(e=>new Date(e.ts).toISOString().split('T')[0]));
+    const today = new Date().toISOString().split('T')[0];
+    let streak = 0, checkDay = new Date();
+    for (let i=0; i<365; i++) {
+      const d = checkDay.toISOString().split('T')[0];
+      if (days.has(d)) { streak++; checkDay.setDate(checkDay.getDate()-1); }
+      else if (i === 0) { checkDay.setDate(checkDay.getDate()-1); } // no entry today yet, don't break
+      else break;
+    }
+    return streak;
+  }
+
+  // ── Daily summary counts ──
+  function getTodayCounts() {
+    const today = new Date().toISOString().split('T')[0];
+    const p = _prayers.filter(e=>new Date(e.ts).toISOString().split('T')[0]===today).length;
+    const s = _speaks.filter(e=>new Date(e.ts).toISOString().split('T')[0]===today).length;
+    const o = _obedience.filter(e=>new Date(e.ts).toISOString().split('T')[0]===today).length;
+    return {p,s,o};
+  }
+
+  // ── Check if any activity today ──
+  function hasActivityToday() {
+    const today = new Date().toISOString().split('T')[0];
+    return [..._prayers,..._speaks,..._obedience].some(e=>new Date(e.ts).toISOString().split('T')[0]===today);
+  }
+
+  // ═══════════════ RENDER ═══════════════
+  function render(el) {
+    load();
+    const todayC = getTodayCounts();
+    const streak = calcStreak();
+    const noActivity = !hasActivityToday();
+
+    el.innerHTML = `
+    <div class="gz-wrap" id="gz-wrap">
+      <div class="gz-header">
+        <span class="gz-header-icon">🕊️</span>
+        <div class="gz-header-title">God Zone</div>
+        <div class="gz-header-subtitle">"Be still, and know."</div>
+      </div>
+      <div class="gz-divider"></div>
+
+      ${noActivity ? `
+      <div class="gz-reminder-banner">
+        <span class="gz-reminder-icon">🌙</span>
+        <span>You haven't added anything to God Zone today. Take a moment to be still.</span>
+      </div>` : ''}
+
+      <div class="gz-daily-summary">
+        <div class="gz-daily-chip">🙏 Today: <strong>${todayC.p}</strong> prayer${todayC.p!==1?'s':''}</div>
+        <div class="gz-daily-chip">🕊️ Today: <strong>${todayC.s}</strong> reflection${todayC.s!==1?'s':''}</div>
+        <div class="gz-daily-chip">🌱 Today: <strong>${todayC.o}</strong> action${todayC.o!==1?'s':''}</div>
+        <div class="gz-daily-chip">🔥 Streak: <strong>${streak}</strong> day${streak!==1?'s':''}</div>
+      </div>
+
+      <div class="gz-tabs" id="gz-tabs">
+        <button class="gz-tab ${_tab==='prayers'?'active':''}" onclick="GodZone.switchTab('prayers')">🙏 Prayers</button>
+        <button class="gz-tab ${_tab==='speaks'?'active':''}" onclick="GodZone.switchTab('speaks')">🕊️ God Speaks</button>
+        <button class="gz-tab ${_tab==='obedience'?'active':''}" onclick="GodZone.switchTab('obedience')">🌱 Obedience</button>
+        <button class="gz-tab ${_tab==='timeline'?'active':''}" onclick="GodZone.switchTab('timeline')">📜 Timeline</button>
+      </div>
+
+      <div id="gz-tab-prayers" class="gz-tab-panel ${_tab==='prayers'?'active':''}">${renderPrayers()}</div>
+      <div id="gz-tab-speaks"  class="gz-tab-panel ${_tab==='speaks'?'active':''}">${renderSpeaks()}</div>
+      <div id="gz-tab-obedience" class="gz-tab-panel ${_tab==='obedience'?'active':''}">${renderObedience()}</div>
+      <div id="gz-tab-timeline" class="gz-tab-panel ${_tab==='timeline'?'active':''}">${renderTimeline()}</div>
+    </div>`;
+  }
+
+  // ─── PRAYERS PANEL ───
+  function renderPrayers() {
+    const sorted = [..._prayers].sort((a,b)=>b.ts-a.ts);
+    return `
+    <div class="gz-section-header">
+      <div class="gz-section-title"><span>🙏</span> Prayers</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:.72rem;color:var(--gz-text-muted);font-family:var(--font-mono);">${_prayers.length} total</span>
+        <button class="gz-btn-add" onclick="GodZone.toggleForm('prayer-form')"><i class="fas fa-plus"></i> Add Prayer</button>
+      </div>
+    </div>
+
+    <div class="gz-add-form" id="prayer-form">
+      <div class="gz-form-row single">
+        <div>
+          <label class="gz-label">Your prayer</label>
+          <textarea class="gz-textarea" id="gz-prayer-text" placeholder="Write your prayer here..."></textarea>
+        </div>
+      </div>
+      <div class="gz-form-row triple">
+        <div>
+          <label class="gz-label">Status</label>
+          <select class="gz-select" id="gz-prayer-status">
+            <option value="pending">🔵 Pending</option>
+            <option value="done">✅ Done</option>
+            <option value="answered">✨ Answered</option>
+          </select>
+        </div>
+        <div>
+          <label class="gz-label">Emotion after prayer</label>
+          <input class="gz-input" id="gz-prayer-emotion" placeholder="e.g. Peace, Release..." maxlength="40">
+        </div>
+        <div>
+          <label class="gz-label">Date (optional)</label>
+          <input class="gz-input" type="date" id="gz-prayer-date">
+        </div>
+      </div>
+      <div class="gz-form-actions">
+        <button class="gz-btn gz-btn-ghost" onclick="GodZone.toggleForm('prayer-form')">Cancel</button>
+        <button class="gz-btn gz-btn-primary" onclick="GodZone.savePrayer()"><i class="fas fa-save"></i> Save Prayer</button>
+      </div>
+    </div>
+
+    ${sorted.length===0 ? `<div class="gz-empty"><span class="gz-empty-icon">🙏</span><div class="gz-empty-text">Your prayers live here.<br>Start with what's on your heart.</div></div>` : ''}
+    <div class="gz-prayers-grid">
+      ${sorted.map(p=>`
+      <div class="gz-prayer-card" id="gz-prayer-${p.id}">
+        <span class="gz-prayer-status ${p.status}">${{pending:'🔵 Pending',done:'✅ Done',answered:'✨ Answered'}[p.status]||p.status}</span>
+        <div class="gz-prayer-text">${escHtml(p.text)}</div>
+        <div class="gz-prayer-meta">
+          <span class="gz-prayer-date">${fmtDate(p.ts)} · ${fmtTime(p.ts)}</span>
+          ${p.emotion?`<span class="gz-prayer-emotion">${escHtml(p.emotion)}</span>`:''}
+        </div>
+        <div class="gz-card-actions">
+          <button class="gz-card-btn" onclick="GodZone.cyclePrayerStatus('${p.id}')"><i class="fas fa-sync-alt"></i> Status</button>
+          <button class="gz-card-btn danger" onclick="GodZone.deletePrayer('${p.id}')"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // ─── GOD SPEAKS PANEL ───
+  function renderSpeaks() {
+    const sorted = [..._speaks].sort((a,b)=>b.ts-a.ts);
+    return `
+    <div class="gz-section-header">
+      <div class="gz-section-title"><span>🕊️</span> God Speaks</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:.72rem;color:var(--gz-text-muted);font-family:var(--font-mono);">${_speaks.length} total</span>
+        <button class="gz-btn-add" onclick="GodZone.toggleForm('speaks-form')"><i class="fas fa-plus"></i> Add Reflection</button>
+      </div>
+    </div>
+
+    <div class="gz-add-form" id="speaks-form">
+      <div class="gz-form-row single">
+        <div>
+          <label class="gz-label">What did you receive?</label>
+          <textarea class="gz-textarea" id="gz-speaks-message" placeholder="Write the message, insight, or scripture..."></textarea>
+        </div>
+      </div>
+      <div class="gz-form-row">
+        <div>
+          <label class="gz-label">Source type</label>
+          <select class="gz-select" id="gz-speaks-source">
+            <option value="Scripture">📖 Scripture</option>
+            <option value="Reflection">💭 Reflection</option>
+            <option value="Life event">🌿 Life Event</option>
+            <option value="Inner feeling">🌊 Inner Feeling</option>
+          </select>
+        </div>
+        <div>
+          <label class="gz-label">Tag</label>
+          <select class="gz-select" id="gz-speaks-tag">
+            <option value="peace">☁️ Peace</option>
+            <option value="guidance">🧭 Guidance</option>
+            <option value="correction">⚡ Correction</option>
+            <option value="reminder">🔔 Reminder</option>
+          </select>
+        </div>
+      </div>
+      <div class="gz-form-actions">
+        <button class="gz-btn gz-btn-ghost" onclick="GodZone.toggleForm('speaks-form')">Cancel</button>
+        <button class="gz-btn gz-btn-primary" onclick="GodZone.saveSpeaks()"><i class="fas fa-save"></i> Save Reflection</button>
+      </div>
+    </div>
+
+    ${sorted.length===0 ? `<div class="gz-empty"><span class="gz-empty-icon">🕊️</span><div class="gz-empty-text">Record what you sense God is saying.<br>Insights, scripture, quiet impressions.</div></div>` : ''}
+    <div class="gz-speaks-grid">
+      ${sorted.map(s=>`
+      <div class="gz-speaks-card" id="gz-speaks-${s.id}">
+        <div style="margin-bottom:var(--sp-3);display:flex;flex-wrap:wrap;align-items:center;gap:4px;">
+          <span class="gz-speaks-source">${escHtml(s.source)}</span>
+          <span class="gz-speaks-tag ${s.tag}">${{peace:'☁️ Peace',guidance:'🧭 Guidance',correction:'⚡ Correction',reminder:'🔔 Reminder'}[s.tag]||s.tag}</span>
+        </div>
+        <div class="gz-speaks-message">${escHtml(s.message)}</div>
+        <div class="gz-speaks-meta">
+          <span>${fmtDate(s.ts)} · ${fmtTime(s.ts)}</span>
+        </div>
+        <div class="gz-card-actions">
+          <button class="gz-card-btn danger" onclick="GodZone.deleteSpeaks('${s.id}')"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // ─── OBEDIENCE LOG PANEL ───
+  function renderObedience() {
+    const sorted = [..._obedience].sort((a,b)=>b.ts-a.ts);
+    const streak = calcStreak();
+    return `
+    <div class="gz-section-header">
+      <div class="gz-section-title"><span>🌱</span> Obedience Log</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        ${streak>0?`<span class="gz-streak-badge">🔥 ${streak}-day streak</span>`:''}
+        <button class="gz-btn-add" onclick="GodZone.toggleForm('obedience-form')"><i class="fas fa-plus"></i> Log Action</button>
+      </div>
+    </div>
+
+    <div class="gz-add-form" id="obedience-form">
+      <div class="gz-form-row single">
+        <div>
+          <label class="gz-label">Action of faith performed</label>
+          <input class="gz-input" id="gz-obedience-action" placeholder="e.g. Prayed on time, helped someone, restrained anger...">
+        </div>
+      </div>
+      <div class="gz-form-row">
+        <div>
+          <label class="gz-label">Emotional impact (optional)</label>
+          <input class="gz-input" id="gz-obedience-impact" placeholder="e.g. Grateful, lighter, convicted..." maxlength="60">
+        </div>
+        <div>
+          <label class="gz-label">Date (optional)</label>
+          <input class="gz-input" type="date" id="gz-obedience-date">
+        </div>
+      </div>
+      <div class="gz-form-actions">
+        <button class="gz-btn gz-btn-ghost" onclick="GodZone.toggleForm('obedience-form')">Cancel</button>
+        <button class="gz-btn gz-btn-primary" onclick="GodZone.saveObedience()"><i class="fas fa-save"></i> Log Action</button>
+      </div>
+    </div>
+
+    ${sorted.length===0 ? `<div class="gz-empty"><span class="gz-empty-icon">🌱</span><div class="gz-empty-text">Every act of obedience matters.<br>Log what you did in faith today.</div></div>` : ''}
+    <div class="gz-obedience-list">
+      ${sorted.map(o=>`
+      <div class="gz-obedience-card" id="gz-ob-${o.id}">
+        <div class="gz-obedience-icon"><i class="fas fa-leaf"></i></div>
+        <div class="gz-obedience-content">
+          <div class="gz-obedience-action">${escHtml(o.action)}</div>
+          <div class="gz-obedience-footer">
+            <span class="gz-obedience-date">${fmtDate(o.ts)} · ${fmtTime(o.ts)}</span>
+            ${o.impact?`<span class="gz-obedience-impact">${escHtml(o.impact)}</span>`:''}
+          </div>
+        </div>
+        <button class="gz-card-btn danger" onclick="GodZone.deleteObedience('${o.id}')" style="flex:none;width:32px;height:32px;border-radius:8px;font-size:.7rem;"><i class="fas fa-trash"></i></button>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // ─── TIMELINE VIEW ───
+  function renderTimeline() {
+    const all = [
+      ..._prayers.map(e=>({...e,kind:'prayers'})),
+      ..._speaks.map(e=>({...e,kind:'speaks'})),
+      ..._obedience.map(e=>({...e,kind:'obedience'}))
+    ].sort((a,b)=>b.ts-a.ts);
+
+    if (!all.length) return `<div class="gz-empty"><span class="gz-empty-icon">📜</span><div class="gz-empty-text">Your spiritual journey will appear here<br>as a unified timeline.</div></div>`;
+
+    const items = all.map(e=>{
+      const kind = e.kind;
+      let icon, badge, preview;
+      if (kind==='prayers') {
+        icon='🙏'; badge='Prayer';
+        preview=`<div style="font-size:var(--text-sm);color:var(--gz-text);font-style:italic;font-weight:300;line-height:1.6;">${escHtml((e.text||'').substring(0,120))}${(e.text||'').length>120?'…':''}</div>
+          <span class="gz-prayer-status ${e.status}" style="margin-top:8px;">${{pending:'🔵 Pending',done:'✅ Done',answered:'✨ Answered'}[e.status]||e.status}</span>`;
+      } else if (kind==='speaks') {
+        icon='🕊️'; badge='God Speaks';
+        preview=`<div class="gz-speaks-message" style="margin:0;font-size:var(--text-sm);">${escHtml((e.message||'').substring(0,120))}${(e.message||'').length>120?'…':''}</div>
+          <span class="gz-speaks-source" style="margin-top:8px;">${escHtml(e.source)}</span>`;
+      } else {
+        icon='🌱'; badge='Obedience';
+        preview=`<div style="font-size:var(--text-sm);color:var(--gz-text);font-weight:500;">${escHtml(e.action||'')}</div>
+          ${e.impact?`<span class="gz-obedience-impact" style="margin-top:8px;display:inline-block;">${escHtml(e.impact)}</span>`:''}`;
+      }
+      return `
+      <div class="gz-timeline-item ${kind}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:1rem;">${icon}</span>
+          <span class="gz-timeline-type-badge">${badge}</span>
+          <span style="font-size:.65rem;color:var(--gz-text-muted);font-family:var(--font-mono);margin-left:auto;">${fmtDate(e.ts)}</span>
+        </div>
+        <div style="background:var(--gz-card);border:1px solid var(--gz-border);border-radius:var(--gz-radius-sm);padding:var(--sp-4);">
+          ${preview}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="gz-section-header">
+      <div class="gz-section-title"><span>📜</span> Timeline</div>
+      <span style="font-size:.72rem;color:var(--gz-text-muted);">${all.length} entries</span>
+    </div>
+    <div class="gz-timeline">${items}</div>`;
+  }
+
+  // ═══════════════ ACTIONS ═══════════════
+  function switchTab(tab) {
+    _tab = tab;
+    document.querySelectorAll('.gz-tab').forEach(b=>{
+      b.classList.toggle('active', b.textContent.toLowerCase().includes(tab==='timeline'?'timeline':tab==='prayers'?'prayer':tab==='speaks'?'speaks':'obedience'));
+    });
+    document.querySelectorAll('.gz-tab-panel').forEach(p=>p.classList.remove('active'));
+    const panel = document.getElementById('gz-tab-'+tab);
+    if (panel) {
+      panel.classList.add('active');
+      panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
+  }
+
+  function toggleForm(id) {
+    const f = document.getElementById(id);
+    if (!f) return;
+    f.classList.toggle('open');
+    if (f.classList.contains('open')) {
+      const first = f.querySelector('input,textarea,select');
+      if (first) setTimeout(()=>first.focus(),50);
+    }
+  }
+
+  function savePrayer() {
+    const text = document.getElementById('gz-prayer-text')?.value?.trim();
+    if (!text) { showToast('Prayer text is required','error'); return; }
+    const dateVal = document.getElementById('gz-prayer-date')?.value;
+    const ts = dateVal ? new Date(dateVal).getTime() : Date.now();
+    _prayers.push({
+      id: uid(),
+      text,
+      status: document.getElementById('gz-prayer-status')?.value||'pending',
+      emotion: document.getElementById('gz-prayer-emotion')?.value?.trim()||'',
+      ts: isNaN(ts)?Date.now():ts
+    });
+    save();
+    showToast('Prayer saved 🙏','success');
+    re('prayers');
+  }
+
+  function saveSpeaks() {
+    const message = document.getElementById('gz-speaks-message')?.value?.trim();
+    if (!message) { showToast('Message is required','error'); return; }
+    _speaks.push({
+      id: uid(),
+      message,
+      source: document.getElementById('gz-speaks-source')?.value||'Reflection',
+      tag: document.getElementById('gz-speaks-tag')?.value||'peace',
+      ts: Date.now()
+    });
+    save();
+    showToast('Reflection saved 🕊️','success');
+    re('speaks');
+  }
+
+  function saveObedience() {
+    const action = document.getElementById('gz-obedience-action')?.value?.trim();
+    if (!action) { showToast('Describe the action','error'); return; }
+    const dateVal = document.getElementById('gz-obedience-date')?.value;
+    const ts = dateVal ? new Date(dateVal).getTime() : Date.now();
+    _obedience.push({
+      id: uid(),
+      action,
+      impact: document.getElementById('gz-obedience-impact')?.value?.trim()||'',
+      ts: isNaN(ts)?Date.now():ts
+    });
+    save();
+    showToast('Action logged 🌱','success');
+    re('obedience');
+  }
+
+  function cyclePrayerStatus(id) {
+    const p = _prayers.find(x=>x.id===id);
+    if (!p) return;
+    const cycle = {pending:'done',done:'answered',answered:'pending'};
+    p.status = cycle[p.status]||'pending';
+    save();
+    re('prayers');
+  }
+
+  function deletePrayer(id) {
+    _prayers = _prayers.filter(x=>x.id!==id);
+    save(); re('prayers');
+  }
+  function deleteSpeaks(id) {
+    _speaks = _speaks.filter(x=>x.id!==id);
+    save(); re('speaks');
+  }
+  function deleteObedience(id) {
+    _obedience = _obedience.filter(x=>x.id!==id);
+    save(); re('obedience');
+  }
+
+  // Re-render just a panel
+  function re(tab) {
+    const panel = document.getElementById('gz-tab-'+tab);
+    if (!panel) return;
+    if (tab==='prayers')   panel.innerHTML = renderPrayers();
+    if (tab==='speaks')    panel.innerHTML = renderSpeaks();
+    if (tab==='obedience') panel.innerHTML = renderObedience();
+    if (tab==='timeline')  panel.innerHTML = renderTimeline();
+    // Refresh daily summary
+    const todayC = getTodayCounts();
+    const streak = calcStreak();
+    document.querySelectorAll('.gz-daily-chip').forEach((el,i)=>{
+      if(i===0) el.innerHTML=`🙏 Today: <strong>${todayC.p}</strong> prayer${todayC.p!==1?'s':''}`;
+      if(i===1) el.innerHTML=`🕊️ Today: <strong>${todayC.s}</strong> reflection${todayC.s!==1?'s':''}`;
+      if(i===2) el.innerHTML=`🌱 Today: <strong>${todayC.o}</strong> action${todayC.o!==1?'s':''}`;
+      if(i===3) el.innerHTML=`🔥 Streak: <strong>${streak}</strong> day${streak!==1?'s':''}`;
+    });
+  }
+
+  // Public API
+  return { render, switchTab, toggleForm, savePrayer, saveSpeaks, saveObedience, cyclePrayerStatus, deletePrayer, deleteSpeaks, deleteObedience };
+})();
+
+window.GodZone = GodZone;
+
+function renderGodZone(el) {
+  GodZone.render(el);
+}
+
+// ─── end God Zone module ───
+
 window.renderSection = renderSection;
 window.updateBadges = updateBadges;
 window.updateXPBar = updateXPBar;
@@ -3999,7 +5236,8 @@ function renderSection(section) {
     notes: renderNotes, 'follow-ups': renderFollowUps,
     systems: renderSystems, learning: renderLearning, studies: renderStudies,
     calendar: renderCalendar, review: renderReview,
-    habits: renderHabits, decision: renderDecision, brainstorm: renderBrainstorm
+    habits: renderHabits, decision: renderDecision, brainstorm: renderBrainstorm,
+    godzone: renderGodZone
   };
   if (fns[section]) fns[section](content);
   content.scrollTop = 0;
@@ -7981,6 +9219,13 @@ function saveNextCall() {
   renderCallsBar();
   renderClientsList();
   showToast('📞 Call scheduled successfully');
+  // Sync with main notification system immediately
+  if (typeof CoachingCallNotifier !== 'undefined') {
+    setTimeout(() => {
+      CoachingCallNotifier.updateBellWithCalls();
+      CoachingCallNotifier.highlightTodayCards();
+    }, 80);
+  }
 }
 
 function markCallDone(callId) {
@@ -7990,7 +9235,14 @@ function markCallDone(callId) {
   const call = all.find(c => c.id === callId);
   if (call) call.done = true;
   callsSave(all);
-  setTimeout(() => { renderCallsBar(); renderClientsList(); }, 500);
+  setTimeout(() => {
+    renderCallsBar();
+    renderClientsList();
+    if (typeof CoachingCallNotifier !== 'undefined') {
+      CoachingCallNotifier.updateBellWithCalls();
+      CoachingCallNotifier.highlightTodayCards();
+    }
+  }, 500);
   showToast('✅ Call marked as done');
 }
 
@@ -8027,6 +9279,12 @@ function confirmReschedule() {
   renderCallsBar();
   renderClientsList();
   showToast('📅 Call rescheduled');
+  if (typeof CoachingCallNotifier !== 'undefined') {
+    setTimeout(() => {
+      CoachingCallNotifier.updateBellWithCalls();
+      CoachingCallNotifier.highlightTodayCards();
+    }, 80);
+  }
 }
 
 /* ── RENDER CALLS BAR ── */
@@ -8103,6 +9361,13 @@ function init() {
       section2.addEventListener('change', updateWhatsAppBtnState);
       section2.addEventListener('input',  updateWhatsAppBtnState);
     }
+    // Sync with global notification system after client data loads
+    setTimeout(() => {
+      if (typeof CoachingCallNotifier !== 'undefined') {
+        CoachingCallNotifier.updateBellWithCalls();
+        CoachingCallNotifier.highlightTodayCards();
+      }
+    }, 1200);
   });
 }
 
@@ -8122,6 +9387,297 @@ return {
 };
 
 })(); // end CoachingSystem IIFE
+
+/* ═══════════════════════════════════════════════════════════════════
+   COACHING CALL NOTIFIER
+   — Bridges CoachingSystem calls ↔ Main NotificationSystem
+   — Checks time every 30s for exact-minute call triggers
+   — Highlights client cards green when call is today
+   — Injects calls into the topbar bell dropdown
+═══════════════════════════════════════════════════════════════════ */
+const CoachingCallNotifier = (() => {
+
+  const CALLS_KEY      = 'coaching_upcoming_calls_v1';
+  const FIRED_KEY      = 'coaching_call_fired_v1';   // tracks which calls already triggered banner
+  let   _tickInterval  = null;
+  let   _bannerTimer   = null;
+
+  /* ── helpers ── */
+  function _callsLoad() {
+    try { return JSON.parse(localStorage.getItem(CALLS_KEY) || '[]'); }
+    catch(e) { return []; }
+  }
+  function _firedLoad() {
+    try { return JSON.parse(localStorage.getItem(FIRED_KEY) || '{}'); }
+    catch(e) { return {}; }
+  }
+  function _firedSave(obj) {
+    localStorage.setItem(FIRED_KEY, JSON.stringify(obj));
+  }
+
+  /* ── Is a call scheduled for today? ── */
+  function _isToday(dateStr) {
+    if (!dateStr) return false;
+    const today = new Date();
+    const d     = new Date(dateStr);
+    return d.getFullYear() === today.getFullYear()
+        && d.getMonth()    === today.getMonth()
+        && d.getDate()     === today.getDate();
+  }
+
+  /* ── Current HH:MM string ── */
+  function _nowHHMM() {
+    const n = new Date();
+    return n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0');
+  }
+
+  /* ══════════════════════════════════
+     1. SHOW CALL-NOW BANNER
+  ══════════════════════════════════ */
+  function showBanner(clientName) {
+    const banner = document.getElementById('cs-call-now-banner');
+    const label  = document.getElementById('cs-call-now-client');
+    if (!banner || !label) return;
+    label.textContent = clientName;
+    banner.classList.add('visible');
+
+    // Also flash the notification bell green
+    const btn = document.getElementById('notif-btn');
+    if (btn) {
+      btn.classList.add('has-calls');
+      setTimeout(() => btn.classList.remove('has-calls'), 8000);
+    }
+
+    // Auto-dismiss after 20 seconds
+    clearTimeout(_bannerTimer);
+    _bannerTimer = setTimeout(() => dismissBanner(), 20000);
+
+    // Also show the main daily banner with call info if it's not already visible
+    _injectIntoMainBanner(clientName);
+  }
+
+  function dismissBanner() {
+    const banner = document.getElementById('cs-call-now-banner');
+    if (banner) banner.classList.remove('visible');
+    clearTimeout(_bannerTimer);
+  }
+
+  /* ══════════════════════════════════
+     2. INJECT INTO MAIN DAILY BANNER
+        (appends call info to summary)
+  ══════════════════════════════════ */
+  function _injectIntoMainBanner(clientName) {
+    const summary = document.getElementById('ml-banner-summary');
+    const banner  = document.getElementById('ml-daily-banner');
+    if (!summary || !banner) return;
+
+    // Append or show banner with call info
+    const callHTML = ` &nbsp;•&nbsp; <span style="color:var(--green);font-weight:700;">📞 ${clientName} — Call Now!</span>`;
+
+    // If banner already visible, append to existing summary
+    if (banner.classList.contains('visible')) {
+      const existing = summary.innerHTML;
+      if (!existing.includes('Call Now')) summary.innerHTML += callHTML;
+    } else {
+      // Build a combined summary
+      let baseSummary = '';
+      if (typeof NotificationSystem !== 'undefined' && typeof NotificationSystem.aggregate === 'function') {
+        const agg = NotificationSystem.aggregate();
+        const parts = [];
+        if (agg.tasksToday > 0)     parts.push(`<strong>${agg.tasksToday}</strong> Task${agg.tasksToday > 1 ? 's' : ''}`);
+        if (agg.followupsToday > 0) parts.push(`<strong>${agg.followupsToday}</strong> Follow-up${agg.followupsToday > 1 ? 's' : ''}`);
+        baseSummary = parts.join(' &nbsp;•&nbsp; ');
+      }
+      summary.innerHTML = (baseSummary || '🔔 Today') + callHTML;
+      requestAnimationFrame(() => {
+        banner.classList.remove('hiding');
+        requestAnimationFrame(() => banner.classList.add('visible'));
+      });
+      // Auto-dismiss banner after 15s
+      setTimeout(() => {
+        if (banner.classList.contains('visible')) {
+          banner.classList.add('hiding');
+          banner.classList.remove('visible');
+        }
+      }, 15000);
+    }
+  }
+
+  /* ══════════════════════════════════
+     3. UPDATE NOTIFICATION BELL
+        — appends today's calls to the
+          existing bell dropdown list
+  ══════════════════════════════════ */
+  function updateBellWithCalls() {
+    const calls = _callsLoad().filter(c => !c.done && _isToday(c.dateStr));
+    if (!calls.length) return;
+
+    // Dropdown list
+    const listEl  = document.getElementById('notif-list');
+    const footerEl = document.getElementById('notif-footer');
+    if (listEl) {
+      // Remove any previous call section to avoid duplication
+      listEl.querySelector('.notif-call-section')?.remove();
+
+      const section = document.createElement('div');
+      section.className = 'notif-call-section';
+      section.innerHTML = calls.map(c => {
+        const timeLabel = c.timeStr || 'Today';
+        return `<div class="notif-call-item">
+          <div class="nci-dot"></div>
+          <span class="nci-text">📞 ${escHtmlSimple(c.clientName)}</span>
+          <span class="nci-time">${escHtmlSimple(timeLabel)}</span>
+        </div>`;
+      }).join('');
+      listEl.appendChild(section);
+
+      if (footerEl) {
+        footerEl.textContent = `${calls.length} coaching call${calls.length > 1 ? 's' : ''} today`;
+      }
+    }
+
+    // Modal list (mobile full-screen notif modal)
+    const modalListEl  = document.getElementById('notif-modal-list');
+    if (modalListEl) {
+      modalListEl.querySelector('.notif-call-section')?.remove();
+      const section2 = document.createElement('div');
+      section2.className = 'notif-call-section';
+      section2.innerHTML = calls.map(c => {
+        const timeLabel = c.timeStr || 'Today';
+        return `<div class="notif-call-item">
+          <div class="nci-dot"></div>
+          <span class="nci-text">📞 ${escHtmlSimple(c.clientName)}</span>
+          <span class="nci-time">${escHtmlSimple(timeLabel)}</span>
+        </div>`;
+      }).join('');
+      modalListEl.appendChild(section2);
+    }
+
+    // Update badge count to include calls
+    const badge = document.getElementById('notif-badge');
+    if (badge) {
+      const currentCount = parseInt(badge.textContent, 10) || 0;
+      const total = currentCount + calls.length;
+      badge.style.display = 'flex';
+      badge.textContent = total > 9 ? '9+' : total;
+    }
+  }
+
+  /* ══════════════════════════════════
+     4. HIGHLIGHT TODAY-CALL CARDS
+        — adds .call-today class to
+          client cards with a call today
+  ══════════════════════════════════ */
+  function highlightTodayCards() {
+    const calls = _callsLoad().filter(c => !c.done && _isToday(c.dateStr));
+    const todayClientNames = new Set(calls.map(c => (c.clientName || '').toLowerCase()));
+
+    // Card elements rendered into #cs-clients-grid
+    const grid = document.getElementById('cs-clients-grid');
+    if (!grid) return;
+
+    grid.querySelectorAll('.cs-client-card').forEach(card => {
+      const nameEl = card.querySelector('.cs-cc-name');
+      if (!nameEl) return;
+      const name = (nameEl.textContent || '').trim().toLowerCase();
+      card.classList.toggle('call-today', todayClientNames.has(name));
+    });
+  }
+
+  /* ══════════════════════════════════
+     5. REAL-TIME TICK — every 30s
+        checks HH:MM vs scheduled calls
+  ══════════════════════════════════ */
+  function _tick() {
+    const now   = _nowHHMM();
+    const today = new Date().toISOString().split('T')[0];
+    const calls = _callsLoad().filter(c => !c.done);
+    const fired = _firedLoad();
+    let changed = false;
+
+    calls.forEach(call => {
+      if (!call.dateStr || !call.timeStr) return;
+      if (call.dateStr !== today) return;          // not today
+      if (call.timeStr !== now)   return;          // not this minute
+      if (fired[call.id] === today) return;        // already fired today
+
+      // Fire!
+      showBanner(call.clientName || 'Client');
+      fired[call.id] = today;
+      changed = true;
+    });
+
+    if (changed) _firedSave(fired);
+
+    // Also refresh card highlights every tick
+    highlightTodayCards();
+  }
+
+  /* ══════════════════════════════════
+     6. PATCH saveNextCall
+        — hook into CoachingSystem to
+          sync immediately after save
+  ══════════════════════════════════ */
+  function _patchCoachingSystem() {
+    if (typeof CoachingSystem === 'undefined') return;
+    const orig = CoachingSystem.saveNextCall;
+    if (!orig || CoachingSystem._callNotifierPatched) return;
+    CoachingSystem.saveNextCall = function() {
+      orig.apply(this, arguments);
+      // After the call is saved, update bell + card highlights
+      setTimeout(() => {
+        updateBellWithCalls();
+        highlightTodayCards();
+      }, 100);
+    };
+    // Also patch renderClientsList so highlights apply on every re-render
+    const origRender = CoachingSystem.renderClientsList;
+    if (origRender) {
+      CoachingSystem.renderClientsList = function() {
+        origRender.apply(this, arguments);
+        setTimeout(highlightTodayCards, 50);
+      };
+    }
+    CoachingSystem._callNotifierPatched = true;
+  }
+
+  /* ── simple HTML escaper (no dependency on CoachingSystem internals) ── */
+  function escHtmlSimple(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ══════════════════════════════════
+     7. INIT — called on DOMContentLoaded
+  ══════════════════════════════════ */
+  function init() {
+    // Patch CoachingSystem hooks
+    _patchCoachingSystem();
+
+    // Initial sync
+    updateBellWithCalls();
+    highlightTodayCards();
+
+    // Start real-time interval ticker (every 30 seconds)
+    if (_tickInterval) clearInterval(_tickInterval);
+    _tickInterval = setInterval(_tick, 30000);
+
+    // Immediate tick to catch any calls scheduled for right now on load
+    _tick();
+  }
+
+  /* ── public API ── */
+  return { init, dismissBanner, updateBellWithCalls, highlightTodayCards };
+
+})();
+
+window.CoachingCallNotifier = CoachingCallNotifier;
+
+// Boot the notifier after DOM is ready (delayed slightly so CoachingSystem is defined)
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => CoachingCallNotifier.init(), 800);
+});
 
 </script>
 
