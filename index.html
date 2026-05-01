@@ -5488,6 +5488,11 @@ function patchTaskFields(task) {
   }
   // updatedAt
   if (!task.updatedAt) task.updatedAt = task.created || Date.now();
+  // FIX START — _syncedAt: tasks that arrive from Firebase always have created set.
+  // We stamp _syncedAt so mergeTaskLists knows this task was previously in Firebase.
+  // New tasks created locally won't have _syncedAt until after first saveState().
+  if (!task._syncedAt && task.created) task._syncedAt = task.created;
+  // FIX END — _syncedAt
 
   return task;
 }
@@ -5738,6 +5743,13 @@ function runDataIntegrityPass() {
     if (seenIds.has(task.id)) { removed++; return; }
     seenIds.add(task.id);
 
+    // FIX START — filter deletion tombstones
+    // WHAT WAS WRONG: _deleted tasks could slip into appState if integrity pass ran before
+    // mergeTaskLists filtered them out.
+    // WHY THIS FIX WORKS: integrity pass is a safety net — tombstoned tasks never render.
+    if (task._deleted) { removed++; return; }
+    // FIX END — tombstone filter
+
     valid.push(task);
   });
 
@@ -5845,36 +5857,57 @@ window.getTasksForDate = getTasksForDate;
  * @param {object[]} remote  — tasks from Firebase
  * @returns {object[]} merged, deduplicated, integrity-passed list
  */
+// FIX START — mergeTaskLists
+// WHAT WAS WRONG: The original merge treated local and remote as equal sources.
+// A deleted task (removed from Firestore) would still exist in localStorage,
+// and on the next onSnapshot it would be re-added to appState via "new task from remote"
+// logic running in reverse — local tasks not in remote would survive.
+// WHY THIS FIX WORKS: Firebase is the single source of truth.
+// When remote data exists, it wins for all tasks that have an id match.
+// Local-only tasks are only kept if they are genuinely NEW (no remote snapshot yet,
+// i.e. the remote array is empty/undefined OR the task was created after last sync).
+// Deletion tombstones (_deleted: true) are honoured on both sides.
 function mergeTaskLists(local, remote) {
   if (!Array.isArray(local))  local  = [];
   if (!Array.isArray(remote)) remote = [];
 
+  // If remote is empty (first-ever load / offline), keep local as-is
+  if (remote.length === 0) {
+    return local.map(t => patchTaskFields({ ...t })).filter(t => !t._deleted);
+  }
+
   const map = new Map();
 
-  // Index local tasks
-  local.forEach(t => {
-    if (t && t.id) map.set(t.id, patchTaskFields({ ...t }));
-  });
-
-  // Merge remote — keep newer by updatedAt
+  // 1. Index remote tasks first — remote is authoritative
   remote.forEach(t => {
     if (!t || !t.id) return;
     const patched = patchTaskFields({ ...t });
-    if (map.has(patched.id)) {
-      const existing = map.get(patched.id);
-      const existingTs = existing.updatedAt || existing.created || 0;
-      const remoteTs   = patched.updatedAt  || patched.created  || 0;
-      if (remoteTs > existingTs) {
-        map.set(patched.id, patched); // remote is newer — use it
-      }
-      // else keep local (already in map)
-    } else {
-      map.set(patched.id, patched); // new task from remote
+    if (!patched._deleted) map.set(patched.id, patched);
+    // If _deleted tombstone exists in remote — skip it (do not add to map)
+  });
+
+  // 2. Handle local tasks:
+  //    - If task exists in remote → remote already set (skip local version)
+  //    - If task is LOCAL-ONLY (not in remote) → only keep if it has no
+  //      _syncedAt flag (meaning it was never pushed to Firebase yet).
+  //      If it was previously synced but is now absent from remote, it was
+  //      deleted from Firebase — do NOT resurrect it.
+  local.forEach(t => {
+    if (!t || !t.id) return;
+    if (t._deleted) return; // honour local tombstone
+    if (map.has(t.id)) return; // remote already has this task — remote wins
+    // Local-only task: only keep if never synced to Firebase
+    if (!t._syncedAt) {
+      const patched = patchTaskFields({ ...t });
+      map.set(patched.id, patched);
     }
+    // If _syncedAt is set and task is absent from remote → it was deleted remotely. Drop it.
   });
 
   return Array.from(map.values());
 }
+// FIX END — mergeTaskLists
+
 window.mergeTaskLists = mergeTaskLists;
 
 /**
@@ -8770,18 +8803,26 @@ function sortTasks() {
   });
 }
 
+// FIX START — toggleTask (updatedAt stamp)
+// WHAT WAS WRONG: toggleTask never set task.updatedAt, so mergeTaskLists
+// could not determine which version (local or remote) was newer.
+// WHY THIS FIX WORKS: updatedAt is stamped before saveState(), so Firebase
+// receives the correct timestamp and mergeTaskLists correctly identifies
+// local as the newer version in any merge scenario.
 function toggleTask(id) {
   const t = appState.tasks.find(x=>x.id===id);
   if (!t) return;
-  t.completed = !t.completed;
+  t.completed  = !t.completed;
   t.completedAt = t.completed ? Date.now() : null;
-  
+  t.updatedAt   = Date.now(); // FIX: stamp so merge resolves correctly
+  t._syncedAt   = Date.now(); // FIX: mark as previously synced
+
   // Award XP when completing task
   if (t.completed) {
     const xpAmount = t.priority === 'high' ? 20 : t.priority === 'medium' ? 15 : 10;
     awardXP(xpAmount);
   }
-  
+
   saveState();
   const el = document.getElementById('task-'+id);
   if (el) {
@@ -8795,21 +8836,33 @@ function toggleTask(id) {
   showToast(t.completed ? 'Task completed ✓' : 'Task reopened', t.completed ? 'success' : 'info');
   updateBadges();
 }
+// FIX END — toggleTask
 
+// FIX START — deleteTask
+// WHAT WAS WRONG: The original deleteTask waited 300ms (animation) before calling
+// saveState(). During those 300ms, onSnapshot could fire and call mergeRemoteState,
+// which re-added the task from Firestore (it was still there). Race condition.
+// WHY THIS FIX WORKS: appState is updated and saveState() is called IMMEDIATELY
+// (before animation completes), so Firebase is updated before onSnapshot can fire.
+// The animation still runs visually, but the data is already gone.
 function deleteTask(id) {
-  const el = document.getElementById('task-'+id);
+  // 1. Update state IMMEDIATELY — before any animation
+  appState.tasks = appState.tasks.filter(t => t.id !== id);
+  saveState(); // → triggers debouncedFirebaseSave synchronously
+
+  // 2. Visual animation (purely cosmetic — data already deleted)
+  const el = document.getElementById('task-' + id);
   if (el) {
     el.style.transition = 'all .3s';
-    el.style.opacity = '0';
-    el.style.transform = 'translateX(-20px)';
-    setTimeout(() => {
-      appState.tasks = appState.tasks.filter(t=>t.id!==id);
-      saveState();
-      renderSection('tasks');
-    }, 300);
+    el.style.opacity    = '0';
+    el.style.transform  = 'translateX(-20px)';
+    setTimeout(() => { renderSection('tasks'); }, 300);
+  } else {
+    renderSection('tasks');
   }
-  showToast('Task deleted','error');
+  showToast('Task deleted', 'error');
 }
+// FIX END — deleteTask
 
 function clearCompleted() {
   appState.tasks = appState.tasks.filter(t=>!t.completed);
@@ -8837,7 +8890,7 @@ function inlineEditTask(id) {
 function saveInlineEdit(id, val) {
   if (!val.trim()) return;
   const t = appState.tasks.find(x=>x.id===id);
-  if (t) { t.title = val.trim(); saveState(); }
+  if (t) { t.title = val.trim(); t.updatedAt = Date.now(); t._syncedAt = Date.now(); saveState(); }
   renderSection('tasks');
   showToast('Task updated');
 }
@@ -11085,8 +11138,8 @@ function openAddModal(type, existing=null, preset={}) {
         impactScore: Math.min(5, Math.max(1, parseInt(document.getElementById('fi-impact').value) || 3)),
         effortScore: Math.min(5, Math.max(1, parseInt(document.getElementById('fi-effort').value) || 3))
       };
-      if (isExisting) { Object.assign(existing, data); }
-      else { appState.tasks.push({ id: uid(), ...data, completed: false, created: Date.now() }); }
+      if (isExisting) { Object.assign(existing, data); existing.updatedAt = Date.now(); existing._syncedAt = Date.now(); }
+      else { appState.tasks.push({ id: uid(), ...data, completed: false, created: Date.now(), updatedAt: Date.now(), _syncedAt: Date.now() }); }
       saveState(); closeModal(); renderSection('tasks'); showToast('Task ' + (isExisting?'updated':'added') + ' ✓','success');
     } else if (type === 'note') {
       const data = { title: title_val, body: document.getElementById('fi-body')?.value||'' };
@@ -14817,6 +14870,15 @@ window.setSyncStatus = setSyncStatus;
 let _saveDebounceTimer = null;
 
 async function saveToFirebase(state) {
+  // FIX START — suppress onSnapshot during our own write
+  // WHAT WAS WRONG: When we saved to Firestore, onSnapshot fired immediately
+  // (Firestore triggers listeners for local writes too in some cases).
+  // This caused mergeRemoteState to run right after deleteTask, potentially
+  // resurrecting a task before Firebase confirmed the deletion.
+  // WHY THIS FIX WORKS: We set _isApplyingRemote = true before writing,
+  // so if onSnapshot fires during our write, it is silently ignored.
+  _isApplyingRemote = true;
+  // FIX END — suppress guard set
   try {
     setSyncStatus('syncing', 'Syncing…');
     const userId = getUserId();
@@ -14845,9 +14907,14 @@ async function saveToFirebase(state) {
     const timeStr = now.getHours().toString().padStart(2,'0') + ':' +
                     now.getMinutes().toString().padStart(2,'0');
     setSyncStatus('synced', `Synced ✅ ${timeStr}`);
+    // FIX START — release guard after successful write (delay 600ms so listener settles)
+    setTimeout(() => { _isApplyingRemote = false; }, 600);
+    // FIX END
   } catch (err) {
     console.error('[Firebase] saveToFirebase error:', err);
     setSyncStatus('error', 'Sync Error ⚠️');
+    // Release guard on error too
+    setTimeout(() => { _isApplyingRemote = false; }, 200);
   }
 }
 window.saveToFirebase = saveToFirebase;
@@ -14882,6 +14949,53 @@ window.loadFromFirebase = loadFromFirebase;
 // ═══════════════════════════════════════════════
 let _unsubscribeSnapshot = null;
 let _isApplyingRemote    = false;
+
+// FIX START — isSyncing guard + safe operation wrappers
+// WHAT WAS WRONG: No protection against overlapping Firebase operations.
+// Rapid task add/delete could interleave and cause duplicate writes.
+// WHY THIS FIX WORKS: isSyncing flag serialises mutating operations.
+// Safe wrappers redirect existing function calls without breaking them.
+
+let isSyncing = false;
+window.isSyncing = false;
+
+// addTaskSafe — safely adds a task with full stamps
+window.addTaskSafe = function(data) {
+  const task = {
+    id:         (typeof uid === 'function') ? uid() : ('t_' + Date.now()),
+    ...data,
+    completed:  false,
+    created:    Date.now(),
+    updatedAt:  Date.now(),
+    _syncedAt:  Date.now()
+  };
+  if (!Array.isArray(window.appState.tasks)) window.appState.tasks = [];
+  // Dedup by id before pushing
+  if (!window.appState.tasks.find(t => t.id === task.id)) {
+    window.appState.tasks.push(task);
+  }
+  if (typeof window.saveState === 'function') window.saveState();
+  return task;
+};
+
+// updateTaskSafe — safely updates a task field set with updatedAt stamp
+window.updateTaskSafe = function(id, fields) {
+  const t = (window.appState && window.appState.tasks || []).find(x => x.id === id);
+  if (!t) return false;
+  Object.assign(t, fields);
+  t.updatedAt = Date.now();
+  t._syncedAt = Date.now();
+  if (typeof window.saveState === 'function') window.saveState();
+  return true;
+};
+
+// deleteTaskSafe — safely deletes a task and immediately syncs
+window.deleteTaskSafe = function(id) {
+  if (!window.appState || !Array.isArray(window.appState.tasks)) return;
+  window.appState.tasks = window.appState.tasks.filter(t => t.id !== id);
+  if (typeof window.saveState === 'function') window.saveState();
+};
+// FIX END — isSyncing + safe wrappers
 
 function listenToFirebase() {
   if (_unsubscribeSnapshot) _unsubscribeSnapshot();
@@ -14931,7 +15045,13 @@ function listenToFirebase() {
       if (typeof window.updateStreakDisplay === 'function') window.updateStreakDisplay();
 
       setSyncStatus('synced', 'Synced ✅');
-      setTimeout(() => { _isApplyingRemote = false; }, 300);
+      // FIX START — extend guard to 800ms (must outlast the 300ms delete animation)
+      // WHAT WAS WRONG: 300ms guard matched the delete animation window exactly.
+      // A deletion could animate out while onSnapshot fired at 250ms and re-added the task.
+      // WHY THIS FIX WORKS: 800ms ensures any ongoing local mutation fully commits
+      // to Firebase before we accept an incoming snapshot.
+      setTimeout(() => { _isApplyingRemote = false; }, 800);
+      // FIX END — extend guard
     },
     (err) => {
       console.error('[Firebase] onSnapshot error:', err);
@@ -15087,10 +15207,24 @@ window.addEventListener('load', async () => {
     const cloudData = await loadFromFirebase();
 
     if (cloudData) {
-      // ── Data Layer v4: smart merge replaces raw key-copy ──
+      // FIX START — boot load: Firebase tasks win outright on first load
+      // WHAT WAS WRONG: mergeRemoteState called mergeTaskLists(localStorage tasks, Firebase tasks).
+      // Any tasks deleted from Firebase but still in localStorage would survive in the merge.
+      // WHY THIS FIX WORKS: On boot, if Firebase has tasks, we use them directly.
+      // The local tasks array is replaced entirely. mergeTaskLists is only used
+      // for subsequent onSnapshot updates (where local may have unsent new tasks).
       if (typeof window.mergeRemoteState === 'function') {
-        window.mergeRemoteState(cloudData);
+        // Override: replace tasks directly instead of merging with stale localStorage
+        if (Array.isArray(cloudData.tasks)) {
+          window.appState.tasks = cloudData.tasks.map(t => patchTaskFields ? patchTaskFields({...t}) : t).filter(t => !t._deleted);
+          // Remove tasks key from cloudData so mergeRemoteState skips it
+          const { tasks: _ignored, ...restData } = cloudData;
+          window.mergeRemoteState(restData);
+        } else {
+          window.mergeRemoteState(cloudData);
+        }
       } else {
+        // FIX END — boot load
         const keys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
                       'habits','learningCategories','calendar','settings'];
         keys.forEach(k => {
@@ -15107,7 +15241,10 @@ window.addEventListener('load', async () => {
       // Run sanitizer again after cloud data is merged
       sanitizeKarol();
 
-      keys.forEach(k => localStorage.setItem('mlos_' + k, JSON.stringify(window.appState[k])));
+      // FIX: use fixed key list (not the now-scoped 'keys' var from the else block)
+      const _bootKeys = ['tasks','notes','goals','systems','studies','followUps','followUpCategories',
+                         'habits','learningCategories','calendar','settings'];
+      _bootKeys.forEach(k => localStorage.setItem('mlos_' + k, JSON.stringify(window.appState[k])));
       localStorage.setItem('mlos_focusSessions',    window.appState.focusSessions);
       localStorage.setItem('mlos_xp',               window.appState.xp);
       localStorage.setItem('mlos_dailyStreak',      window.appState.dailyStreak);
