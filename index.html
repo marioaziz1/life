@@ -5941,6 +5941,13 @@ function mergeRemoteState(remoteData) {
   simpleKeys.forEach(k => {
     if (remoteData[k] !== undefined) appState[k] = remoteData[k];
   });
+
+  // Ministry System tasks — if they arrived in this snapshot, hand them off
+  // MinistrySystem._patchMainSnapshot() installs its own wrapper after boot;
+  // this is a safety net for payloads arriving before that wrapper is active.
+  if (Array.isArray(remoteData.ministryTasks) && remoteData.ministryTasks.length > 0) {
+    try { localStorage.setItem('mlos_ministry_system_v1', JSON.stringify(remoteData.ministryTasks)); } catch(e) {}
+  }
 }
 window.mergeRemoteState = mergeRemoteState;
 
@@ -5965,7 +5972,15 @@ function buildSyncPayload() {
     xp:                  appState.xp,
     dailyStreak:         appState.dailyStreak,
     lastActivityDate:    appState.lastActivityDate,
-    sections_v4:         _sections       // ← new: persists sections to Firebase
+    sections_v4:         _sections,      // persists sections to Firebase
+    ministryTasks:       (function() {   // persists Ministry System tasks to Firebase
+      try {
+        if (window.MinistrySystem && typeof window.MinistrySystem.getTasks === 'function')
+          return window.MinistrySystem.getTasks();
+        var _raw = localStorage.getItem('mlos_ministry_system_v1');
+        return _raw ? (JSON.parse(_raw) || []) : [];
+      } catch(e) { return []; }
+    })()
   };
 }
 window.buildSyncPayload = buildSyncPayload;
@@ -23199,21 +23214,118 @@ if (document.readyState === 'loading') {
   /* ══════════════════════════════════════════════════════════════
    * STEP 1 — ISOLATED DATA LAYER
    * ══════════════════════════════════════════════════════════════ */
-  var MS_KEY = 'mlos_ministry_system_v1';
+  var MS_KEY         = 'mlos_ministry_system_v1';
+  var MS_FS_FIELD    = 'ministryTasks'; // field name inside Firestore users/{id} document
+  var _msFirebaseReady = false;
 
   // ministryTasks: completely separate from appState.tasks
   var ministryTasks = [];
 
+  /* ── NORMALIZATION — applied to every task coming from any source ── */
+  function _normalizeTask(t) {
+    return {
+      id:              t.id              || _msUid(),
+      title:           (t.title          || '').trim(),
+      type:            (t.type           || 'office').toLowerCase().trim(),
+      customTypeLabel: t.customTypeLabel || '',
+      journey:         Array.isArray(t.journey) ? t.journey : [],
+      status:          (t.status === 'completed') ? 'completed' : 'active',
+      createdAt:       t.createdAt       || Date.now()
+    };
+  }
+
+  /* ── LOCAL LOAD (bootstrap / offline fallback) ── */
   function _msLoad() {
     try {
       var raw = localStorage.getItem(MS_KEY);
       if (raw) ministryTasks = JSON.parse(raw);
     } catch(e) { ministryTasks = []; }
     if (!Array.isArray(ministryTasks)) ministryTasks = [];
+    ministryTasks = ministryTasks.map(_normalizeTask);
   }
 
-  function _msSave() {
+  /* ── LOCAL SAVE (always mirrors in-memory to localStorage as fallback) ── */
+  function _msLocalSave() {
     try { localStorage.setItem(MS_KEY, JSON.stringify(ministryTasks)); } catch(e) {}
+  }
+
+  /* ── FIREBASE SAVE — pushes ministryTasks into the main user document ── */
+  function _msFirebaseSave() {
+    _msLocalSave(); // always keep local mirror up to date
+    try {
+      var helpers = window._firestoreHelpers;
+      var db      = window.db;
+      if (!helpers || !db || !helpers.doc || !helpers.setDoc) return; // Firebase not ready yet
+      var userId = (typeof window.getUserId === 'function') ? window.getUserId() : 'mario_main_user';
+      var payload = {};
+      payload[MS_FS_FIELD] = ministryTasks;
+      helpers.setDoc(helpers.doc(db, 'users', userId), { data: payload }, { merge: true })
+        .catch(function(e) { console.warn('[MinistrySystem] Firebase save error:', e); });
+    } catch(e) { console.warn('[MinistrySystem] Firebase save error:', e); }
+  }
+
+  /* Alias used everywhere internally */
+  function _msSave() { _msFirebaseSave(); }
+
+  /* ── FIREBASE REAL-TIME LISTENER for ministry tasks ── */
+  function _msListenFirebase() {
+    try {
+      var helpers = window._firestoreHelpers;
+      var db      = window.db;
+      if (!helpers || !db || !helpers.doc || !helpers.onSnapshot) return;
+      var userId = (typeof window.getUserId === 'function') ? window.getUserId() : 'mario_main_user';
+      helpers.onSnapshot(
+        helpers.doc(db, 'users', userId),
+        function(snap) {
+          if (!snap.exists()) return;
+          var payload = snap.data();
+          if (!payload || !payload.data) return;
+          var remote = payload.data[MS_FS_FIELD];
+          if (!Array.isArray(remote)) return;
+          ministryTasks = remote.map(_normalizeTask);
+          _msLocalSave();
+          _updateNavBadge();
+          // Re-render Ministry section if currently active
+          if (window.currentSection === 'ministry') {
+            var el = document.getElementById('content');
+            if (el) _renderMinistrySection(el);
+          }
+          console.log('[MinistrySystem] Firebase sync — tasks:', ministryTasks.length);
+        },
+        function(err) { console.warn('[MinistrySystem] Firebase listener error:', err); }
+      );
+      _msFirebaseReady = true;
+    } catch(e) { console.warn('[MinistrySystem] Could not attach Firebase listener:', e); }
+  }
+
+  /* ── INITIAL FIREBASE FETCH (one-shot, before listener) ── */
+  function _msLoadFirebase(callback) {
+    try {
+      var helpers = window._firestoreHelpers;
+      var db      = window.db;
+      if (!helpers || !db || !helpers.doc || !helpers.getDoc) {
+        if (callback) callback();
+        return;
+      }
+      var userId = (typeof window.getUserId === 'function') ? window.getUserId() : 'mario_main_user';
+      helpers.getDoc(helpers.doc(db, 'users', userId)).then(function(snap) {
+        if (snap.exists()) {
+          var payload = snap.data();
+          if (payload && payload.data && Array.isArray(payload.data[MS_FS_FIELD])) {
+            ministryTasks = payload.data[MS_FS_FIELD].map(_normalizeTask);
+            _msLocalSave();
+            _updateNavBadge();
+            console.log('[MinistrySystem] Loaded from Firebase — tasks:', ministryTasks.length);
+          }
+        }
+        if (callback) callback();
+      }).catch(function(e) {
+        console.warn('[MinistrySystem] Firebase initial load error:', e);
+        if (callback) callback();
+      });
+    } catch(e) {
+      if (callback) callback();
+    }
   }
 
   function _msUid() {
@@ -23832,13 +23944,14 @@ if (document.readyState === 'loading') {
    * BOOT
    * ══════════════════════════════════════════════════════════════ */
   function _boot() {
+    // 1. Load from localStorage immediately (instant render, offline safe)
     _msLoad();
     _injectNav();
     _injectModalDOM();
     _hookRenderSection();
     _updateNavBadge();
 
-    // Keep badge fresh on any save
+    // 2. Keep badge fresh on any saveState call
     var _origSave = window.saveState;
     if (_origSave && !window._ms_savePatched) {
       window._ms_savePatched = true;
@@ -23848,7 +23961,46 @@ if (document.readyState === 'loading') {
       };
     }
 
-    console.log('[MinistrySystem] v1.0 active. Tasks:', ministryTasks.length);
+    // 3. Firebase: initial fetch + real-time listener
+    //    Wait until _firestoreHelpers / db are available (set by the Firebase module)
+    function _waitForFirebase(attempts) {
+      attempts = attempts || 0;
+      if (attempts > 40) return; // give up after ~4 s
+      if (window._firestoreHelpers && window.db) {
+        _msLoadFirebase(function() {
+          _msListenFirebase();
+          // Also patch the main onSnapshot to keep ministryTasks refreshed
+          _patchMainSnapshot();
+        });
+      } else {
+        setTimeout(function() { _waitForFirebase(attempts + 1); }, 100);
+      }
+    }
+    _waitForFirebase();
+
+    console.log('[MinistrySystem] v1.0 active. Tasks (local):', ministryTasks.length);
+  }
+
+  /*
+   * _patchMainSnapshot — also reads ministryTasks from the main Firebase
+   * document whenever the global onSnapshot fires (so both the main state
+   * and ministry tasks are always in sync from a single document).
+   */
+  function _patchMainSnapshot() {
+    if (window._ms_snapshotPatched) return;
+    window._ms_snapshotPatched = true;
+    var _prevMerge = window.mergeRemoteState;
+    if (typeof _prevMerge === 'function') {
+      window.mergeRemoteState = function mergeRemoteState(remoteData) {
+        _prevMerge(remoteData);
+        // Pick up ministryTasks if they arrived in the same payload
+        if (remoteData && Array.isArray(remoteData[MS_FS_FIELD])) {
+          ministryTasks = remoteData[MS_FS_FIELD].map(_normalizeTask);
+          _msLocalSave();
+          _updateNavBadge();
+        }
+      };
+    }
   }
 
   if (document.readyState === 'loading') {
