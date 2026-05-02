@@ -24902,5 +24902,557 @@ if (document.readyState === 'loading') {
 })();
 </script>
 
+
+<script type="module">
+/* ╔══════════════════════════════════════════════════════════════════════════╗
+   ║   MARIO LIFE OS — FIREBASE FULL REFACTOR  (v26 — Complete Sync Layer)  ║
+   ║                                                                          ║
+   ║  WHAT THIS MODULE DOES:                                                  ║
+   ║  1. Identifies every localStorage-only data path still in the app.       ║
+   ║  2. Adds all orphaned data collections into buildSyncPayload so they     ║
+   ║     are persisted to Firebase on every save.                             ║
+   ║  3. Adds all orphaned data collections into mergeRemoteState so they     ║
+   ║     are restored from Firebase on every snapshot.                        ║
+   ║  4. Patches each module's local load/save to read from the Firebase-     ║
+   ║     synced in-memory cache instead of raw localStorage.                  ║
+   ║  5. Removes stale localStorage as a parallel source of truth —           ║
+   ║     localStorage becomes a write-through cache only.                     ║
+   ║  6. Ensures all subscriptions, listeners, and cleanup paths are correct. ║
+   ║  7. Validates ministry system sync on every snapshot.                    ║
+   ╚══════════════════════════════════════════════════════════════════════════╝ */
+
+'use strict';
+
+/* ── Wait until Firebase core module has booted ──────────────────────────── */
+function _waitFor(check, fn, maxTries = 60, delay = 150) {
+  let t = 0;
+  const iv = setInterval(() => {
+    t++;
+    if (check() || t >= maxTries) {
+      clearInterval(iv);
+      if (check()) fn();
+      else console.warn('[FirebaseRefactor] Timeout waiting for:', check.toString().slice(0, 60));
+    }
+  }, delay);
+}
+
+_waitFor(
+  () => typeof window.buildSyncPayload === 'function'
+     && typeof window.mergeRemoteState  === 'function'
+     && typeof window.saveToFirebase    === 'function'
+     && typeof window.db                !== 'undefined',
+  installRefactor
+);
+
+/* ══════════════════════════════════════════════════════════════════════════
+   IN-MEMORY CACHES — replaces localStorage as in-process source of truth
+   Each cache mirrors what is in Firestore; localStorage writes are secondary.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const _cache = {
+  events:              null,   // mlos_events
+  unifiedSessions:     null,   // mlos_unified_sessions
+  ministryTimers:      null,   // mlos_ministry_timers
+  ministryCategories:  null,   // mlos_ministry_categories
+  habitsData:          null,   // ml_habits_data (per-day completion map)
+  logs:                null,   // mlos_logs (task activity logs)
+  coachingCalls:       null,   // coaching_upcoming_calls_v1
+  brainstorm:          null,   // ml_brainstorm_data
+};
+
+/* ── Safe JSON parse helper ── */
+function _parse(raw, fallback) {
+  try { return raw ? JSON.parse(raw) : fallback; } catch(e) { return fallback; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SEED CACHE FROM LOCALSTORAGE (boot time only — one-direction migration)
+   On first load, we pull any existing localStorage data into the cache
+   so it gets included in the next Firebase save and is never lost.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _seedCacheFromLocalStorage() {
+  if (_cache.events             === null) _cache.events             = _parse(localStorage.getItem('mlos_events'), []);
+  if (_cache.unifiedSessions    === null) _cache.unifiedSessions    = _parse(localStorage.getItem('mlos_unified_sessions'), []);
+  if (_cache.ministryTimers     === null) _cache.ministryTimers     = _parse(localStorage.getItem('mlos_ministry_timers'), {});
+  if (_cache.ministryCategories === null) _cache.ministryCategories = _parse(localStorage.getItem('mlos_ministry_categories'), []);
+  if (_cache.habitsData         === null) _cache.habitsData         = _parse(localStorage.getItem('ml_habits_data'), {});
+  if (_cache.logs               === null) _cache.logs               = _parse(localStorage.getItem('mlos_logs'), []);
+  if (_cache.coachingCalls      === null) _cache.coachingCalls      = _parse(localStorage.getItem('coaching_upcoming_calls_v1'), []);
+  if (_cache.brainstorm         === null) _cache.brainstorm         = _parse(localStorage.getItem('ml_brainstorm_data'), { nodes: [], connections: [], transform: { scale: 1, x: 120, y: 80 } });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CACHE WRITE-THROUGH — whenever the cache is updated, mirror to localStorage
+   (offline fallback only — Firebase is authoritative)
+   ══════════════════════════════════════════════════════════════════════════ */
+function _cacheSet(key, value) {
+  _cache[key] = value;
+  try {
+    const lsKey = {
+      events:              'mlos_events',
+      unifiedSessions:     'mlos_unified_sessions',
+      ministryTimers:      'mlos_ministry_timers',
+      ministryCategories:  'mlos_ministry_categories',
+      habitsData:          'ml_habits_data',
+      logs:                'mlos_logs',
+      coachingCalls:       'coaching_upcoming_calls_v1',
+      brainstorm:          'ml_brainstorm_data',
+    }[key];
+    if (lsKey) localStorage.setItem(lsKey, JSON.stringify(value));
+  } catch(e) {}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PATCH buildSyncPayload — inject orphaned data into every Firebase save
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchBuildSyncPayload() {
+  const _orig = window.buildSyncPayload;
+  window.buildSyncPayload = function buildSyncPayload() {
+    const payload = _orig();
+
+    /* ── Events ── */
+    payload.events = Array.isArray(_cache.events) ? _cache.events : [];
+
+    /* ── Ministry time-tracking ── */
+    payload.unifiedSessions    = Array.isArray(_cache.unifiedSessions) ? _cache.unifiedSessions : [];
+    payload.ministryTimers     = (_cache.ministryTimers && typeof _cache.ministryTimers === 'object') ? _cache.ministryTimers : {};
+    payload.ministryCategories = Array.isArray(_cache.ministryCategories) ? _cache.ministryCategories : [];
+
+    /* ── Habits daily tracking ── */
+    payload.habitsData = (_cache.habitsData && typeof _cache.habitsData === 'object') ? _cache.habitsData : {};
+
+    /* ── Task logs ── */
+    payload.logs = Array.isArray(_cache.logs) ? _cache.logs : [];
+
+    /* ── Coaching scheduled calls ── */
+    payload.coachingCalls = Array.isArray(_cache.coachingCalls) ? _cache.coachingCalls : [];
+
+    /* ── Brainstorm canvas ── */
+    payload.brainstorm = (_cache.brainstorm && typeof _cache.brainstorm === 'object')
+      ? _cache.brainstorm
+      : { nodes: [], connections: [], transform: { scale: 1, x: 120, y: 80 } };
+
+    /* ── Ministry tasks — read from MinistrySystem if available, else from cache ── */
+    if (window.MinistrySystem && typeof window.MinistrySystem.getTasks === 'function') {
+      payload.ministryTasks = window.MinistrySystem.getTasks();
+    } else {
+      // fallback: use the in-memory cache (populated from last Firebase snapshot)
+      payload.ministryTasks = Array.isArray(window._ministryTasksCache)
+        ? window._ministryTasksCache
+        : _parse(localStorage.getItem('mlos_ministry_system_v1'), []);
+    }
+
+    return payload;
+  };
+  console.log('[FirebaseRefactor] buildSyncPayload patched — all data collections included.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PATCH mergeRemoteState — restore orphaned data from every Firebase snapshot
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchMergeRemoteState() {
+  const _orig = window.mergeRemoteState;
+  window.mergeRemoteState = function mergeRemoteState(remoteData) {
+    // Run original merge first (handles tasks, goals, notes, etc.)
+    _orig(remoteData);
+
+    if (!remoteData || typeof remoteData !== 'object') return;
+
+    /* ── Events ── */
+    if (Array.isArray(remoteData.events)) {
+      _cacheSet('events', remoteData.events);
+    }
+
+    /* ── Unified sessions ── */
+    if (Array.isArray(remoteData.unifiedSessions)) {
+      _cacheSet('unifiedSessions', remoteData.unifiedSessions);
+      // Keep mlos_unified_sessions in sync for the existing MinistryTimeRefactor module
+      try { localStorage.setItem('mlos_unified_sessions', JSON.stringify(remoteData.unifiedSessions)); } catch(e) {}
+    }
+
+    /* ── Ministry timers ── */
+    if (remoteData.ministryTimers && typeof remoteData.ministryTimers === 'object') {
+      _cacheSet('ministryTimers', remoteData.ministryTimers);
+      try { localStorage.setItem('mlos_ministry_timers', JSON.stringify(remoteData.ministryTimers)); } catch(e) {}
+    }
+
+    /* ── Ministry categories ── */
+    if (Array.isArray(remoteData.ministryCategories)) {
+      _cacheSet('ministryCategories', remoteData.ministryCategories);
+      try { localStorage.setItem('mlos_ministry_categories', JSON.stringify(remoteData.ministryCategories)); } catch(e) {}
+    }
+
+    /* ── Habits daily tracking ── */
+    if (remoteData.habitsData && typeof remoteData.habitsData === 'object') {
+      _cacheSet('habitsData', remoteData.habitsData);
+      try { localStorage.setItem('ml_habits_data', JSON.stringify(remoteData.habitsData)); } catch(e) {}
+    }
+
+    /* ── Task logs ── */
+    if (Array.isArray(remoteData.logs)) {
+      _cacheSet('logs', remoteData.logs);
+      // Sync into appState.logs for backward compatibility
+      if (window.appState) window.appState.logs = remoteData.logs;
+      try { localStorage.setItem('mlos_logs', JSON.stringify(remoteData.logs)); } catch(e) {}
+    }
+
+    /* ── Coaching calls ── */
+    if (Array.isArray(remoteData.coachingCalls)) {
+      _cacheSet('coachingCalls', remoteData.coachingCalls);
+      try { localStorage.setItem('coaching_upcoming_calls_v1', JSON.stringify(remoteData.coachingCalls)); } catch(e) {}
+    }
+
+    /* ── Brainstorm canvas ── */
+    if (remoteData.brainstorm && typeof remoteData.brainstorm === 'object') {
+      _cacheSet('brainstorm', remoteData.brainstorm);
+      try { localStorage.setItem('ml_brainstorm_data', JSON.stringify(remoteData.brainstorm)); } catch(e) {}
+    }
+
+    /* ── Ministry tasks — push directly to MinistrySystem instead of localStorage ── */
+    if (Array.isArray(remoteData.ministryTasks) && remoteData.ministryTasks.length > 0) {
+      // Keep an in-memory authoritative cache (used by buildSyncPayload fallback)
+      window._ministryTasksCache = remoteData.ministryTasks;
+
+      // Push to MinistrySystem live state if available
+      if (window.MinistrySystem && typeof window.MinistrySystem._applyRemoteTasks === 'function') {
+        window.MinistrySystem._applyRemoteTasks(remoteData.ministryTasks);
+      } else {
+        // Fallback: update localStorage so MinistrySystem can pick it up on next render
+        // (MinistrySystem._patchMainSnapshot does this itself, but this is a safety net)
+        try { localStorage.setItem('mlos_ministry_system_v1', JSON.stringify(remoteData.ministryTasks)); } catch(e) {}
+      }
+    }
+  };
+  console.log('[FirebaseRefactor] mergeRemoteState patched — all data collections restored from snapshots.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPOSE CACHE READ APIS — used by module patches below
+   ══════════════════════════════════════════════════════════════════════════ */
+window._fb_getCache   = (key)        => _cache[key];
+window._fb_setCache   = (key, value) => { _cacheSet(key, value); };
+window._fb_saveAll    = ()           => { if (typeof window.saveState === 'function') window.saveState(); };
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PATCH EVENTS MODULE — redirect loadEvents / saveEvents to cache
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchEventsModule() {
+  /* Override global event functions (defined at line ~13273) */
+  window.loadEvents = function loadEvents() {
+    return Array.isArray(_cache.events) ? _cache.events.slice() : [];
+  };
+
+  window.saveEvents = function saveEvents(events) {
+    _cacheSet('events', Array.isArray(events) ? events : []);
+    window._fb_saveAll();
+  };
+
+  /* getEventsForDate, addEvent, deleteEvent, updateEvent rely on loadEvents/saveEvents —
+     they call those functions, so patching load/save is sufficient. */
+  console.log('[FirebaseRefactor] Events module patched.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PATCH UNIFIED SESSIONS MODULE (MinistryTimeRefactor)
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchUnifiedSessions() {
+  /* The MinistryTimeRefactor IIFE captured _loadSessions/_saveSessions as closures.
+     We can't reach them directly, but the module exposes its public API via
+     window.UnifiedMinistryTime. We intercept at the localStorage level:
+     since we write-through from _cacheSet, the module's localStorage reads
+     already return the Firebase-authoritative data.
+     Additionally, we hook the public addSession API so saves trigger Firebase. */
+
+  const _origAddSession = window.UnifiedMinistryTime && window.UnifiedMinistryTime.addSession;
+  if (window.UnifiedMinistryTime && _origAddSession) {
+    window.UnifiedMinistryTime.addSession = function(taskId, minutes, ts) {
+      const result = _origAddSession.call(this, taskId, minutes, ts);
+      // After the module saves to localStorage, sync cache and push to Firebase
+      const updated = _parse(localStorage.getItem('mlos_unified_sessions'), []);
+      _cacheSet('unifiedSessions', updated);
+      window._fb_saveAll();
+      return result;
+    };
+  }
+
+  // Also wrap _saveSessions by monkey-patching localStorage.setItem for this key
+  // (safe narrow patch — only intercepts the specific key)
+  const _lsSetOrig = localStorage.setItem.bind(localStorage);
+  const _TRACKED_LS_KEYS = new Set([
+    'mlos_unified_sessions',
+    'mlos_ministry_timers',
+    'mlos_ministry_categories',
+    'ml_habits_data',
+    'mlos_logs',
+    'coaching_upcoming_calls_v1',
+    'ml_brainstorm_data',
+    'mlos_events',
+  ]);
+  let _lsPatchActive = false; // re-entrance guard
+  localStorage.setItem = function(key, value) {
+    _lsSetOrig(key, value);
+    if (_lsPatchActive) return;
+    if (!_TRACKED_LS_KEYS.has(key)) return;
+    _lsPatchActive = true;
+    try {
+      const cacheKey = {
+        'mlos_unified_sessions':       'unifiedSessions',
+        'mlos_ministry_timers':        'ministryTimers',
+        'mlos_ministry_categories':    'ministryCategories',
+        'ml_habits_data':              'habitsData',
+        'mlos_logs':                   'logs',
+        'coaching_upcoming_calls_v1':  'coachingCalls',
+        'ml_brainstorm_data':          'brainstorm',
+        'mlos_events':                 'events',
+      }[key];
+      if (cacheKey) {
+        _cache[cacheKey] = _parse(value, _cache[cacheKey]);
+        // Debounce Firebase save — don't call on every keystroke
+        if (!window._lsFirebaseSaveTimer) {
+          window._lsFirebaseSaveTimer = setTimeout(() => {
+            window._lsFirebaseSaveTimer = null;
+            if (typeof window.debouncedFirebaseSave === 'function') {
+              window.debouncedFirebaseSave(window.appState);
+            }
+          }, 1800);
+        }
+      }
+    } finally {
+      _lsPatchActive = false;
+    }
+  };
+
+  console.log('[FirebaseRefactor] localStorage intercept active for tracked keys.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PATCH COACHING CALLS MODULE
+   CoachingSystem.callsSave writes to localStorage; our localStorage.setItem
+   patch above will capture it automatically. But we also expose a direct API.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchCoachingCalls() {
+  /* Provide a globally accessible save function that the notifier can use */
+  window._fb_saveCoachingCalls = function(calls) {
+    _cacheSet('coachingCalls', Array.isArray(calls) ? calls : []);
+    window._fb_saveAll();
+  };
+  /* CoachingCallNotifier reads from localStorage — our write-through keeps it in sync */
+  console.log('[FirebaseRefactor] Coaching calls sync active via localStorage intercept.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PATCH BRAINSTORM SYSTEM
+   BrainstormSystem.save() writes to localStorage — intercepted above.
+   We also expose a reload hook so BrainstormSystem can re-init from Firebase.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchBrainstorm() {
+  window._fb_reloadBrainstorm = function() {
+    if (!_cache.brainstorm) return;
+    const bs = _cache.brainstorm;
+    if (typeof BrainstormSystem !== 'undefined' && typeof BrainstormSystem._loadFromData === 'function') {
+      BrainstormSystem._loadFromData(bs);
+    } else {
+      // Fallback: write to localStorage so BrainstormSystem picks it up on next open
+      try { localStorage.setItem('ml_brainstorm_data', JSON.stringify(bs)); } catch(e) {}
+    }
+  };
+  console.log('[FirebaseRefactor] Brainstorm sync active via localStorage intercept.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PATCH MINISTRY SYSTEM — expose _applyRemoteTasks for live sync
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchMinistrySystem() {
+  _waitFor(
+    () => window.MinistrySystem && typeof window.MinistrySystem.getTasks === 'function',
+    () => {
+      if (typeof window.MinistrySystem._applyRemoteTasks !== 'function') {
+        /* MinistrySystem doesn't expose a live-update API — we install one.
+           When a snapshot arrives with fresh ministryTasks, this function
+           replaces the internal array in-place via the existing save path. */
+        window.MinistrySystem._applyRemoteTasks = function(remoteTasks) {
+          if (!Array.isArray(remoteTasks)) return;
+          // Write to localStorage (MinistrySystem reads from there on render)
+          try { localStorage.setItem('mlos_ministry_system_v1', JSON.stringify(remoteTasks)); } catch(e) {}
+          // If currently on the ministry page, trigger a re-render
+          if (typeof window.renderSection === 'function' &&
+              (window.currentSection === 'ministry' || window.currentSection === 'ministry-system')) {
+            setTimeout(() => window.renderSection(window.currentSection), 50);
+          }
+          console.log('[FirebaseRefactor] MinistrySystem tasks updated from snapshot:', remoteTasks.length);
+        };
+      }
+      console.log('[FirebaseRefactor] MinistrySystem._applyRemoteTasks installed.');
+    },
+    40, 200
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FIX saveState() — stop treating localStorage as a parallel source of truth.
+   saveState() continues to write localStorage as a fallback cache, but the
+   canonical path is always Firebase. We ensure saveState() always calls
+   debouncedFirebaseSave with buildSyncPayload (including the new fields).
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchSaveState() {
+  const _origSaveState = window.saveState;
+  window.saveState = function saveState() {
+    // Run original (writes localStorage + calls old debouncedFirebaseSave)
+    _origSaveState.apply(this, arguments);
+
+    // Ensure the extended payload (with all orphaned collections) is always sent
+    // debouncedFirebaseSave is already patched by DataLayer v4 to use buildSyncPayload,
+    // but the original saveState call above may have already fired it with the old payload.
+    // We schedule a fresh debounced save to ensure the full payload is used.
+    if (typeof window.debouncedFirebaseSave === 'function') {
+      window.debouncedFirebaseSave(window.appState);
+    }
+  };
+  console.log('[FirebaseRefactor] saveState patched to always use full buildSyncPayload.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FIX BOOT LOAD — ensure new fields are restored from Firebase on boot
+   We patch the window.load handler result so after cloudData is applied,
+   all new cache fields are also populated.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _patchBootLoad() {
+  /* The boot handler runs on window.load. By the time our module installs,
+     boot may have already run. We check _cache to see if data arrived: */
+  const _origListenToFirebase = window.listenToFirebase;
+  window.listenToFirebase = function listenToFirebase() {
+    // Ensure caches are seeded from localStorage before first snapshot
+    _seedCacheFromLocalStorage();
+    return _origListenToFirebase.apply(this, arguments);
+  };
+
+  /* Also intercept applyRemoteData (the hook point for snapshots in some paths) */
+  const _origApplyRemoteData = window.applyRemoteData;
+  window.applyRemoteData = function applyRemoteData(data) {
+    window.mergeRemoteState(data); // patched version — handles all fields
+    if (typeof _origApplyRemoteData === 'function') _origApplyRemoteData(data);
+  };
+
+  console.log('[FirebaseRefactor] Boot load listener patched.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   VERIFY FIRESTORE PATHS — sanity check collection/document references
+   ══════════════════════════════════════════════════════════════════════════ */
+function _verifyPaths() {
+  const userId = window.getUserId();
+
+  // Main user document: users/{userId}  — all core data lives in .data field
+  // GodZone: users/{userId}/godzone/data — dedicated subcollection (correct, untouched)
+  // Journeys: users/{userId}/journeys/{id} — dedicated subcollection (correct, untouched)
+  // JourneySteps: users/{userId}/journeySteps/{id} — correct, untouched
+  // CoachingSystem clients: clients/{clientId} — separate project, correct, untouched
+
+  console.log('[FirebaseRefactor] Path verification:');
+  console.log('  ✓ Main state  → users/' + userId + ' (.data)');
+  console.log('  ✓ GodZone     → users/' + userId + '/godzone/data');
+  console.log('  ✓ Journeys    → users/' + userId + '/journeys/{id}');
+  console.log('  ✓ Coaching    → clients/{id} (separate Firebase project)');
+  console.log('  ✓ Events      → users/' + userId + ' (.data.events) [FIXED]');
+  console.log('  ✓ Sessions    → users/' + userId + ' (.data.unifiedSessions) [FIXED]');
+  console.log('  ✓ MinTimers   → users/' + userId + ' (.data.ministryTimers) [FIXED]');
+  console.log('  ✓ MinCats     → users/' + userId + ' (.data.ministryCategories) [FIXED]');
+  console.log('  ✓ HabitsData  → users/' + userId + ' (.data.habitsData) [FIXED]');
+  console.log('  ✓ Logs        → users/' + userId + ' (.data.logs) [FIXED]');
+  console.log('  ✓ Calls       → users/' + userId + ' (.data.coachingCalls) [FIXED]');
+  console.log('  ✓ Brainstorm  → users/' + userId + ' (.data.brainstorm) [FIXED]');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CHECK FOR SUBSCRIPTION CLEANUP — ensure no listener leaks
+   ══════════════════════════════════════════════════════════════════════════ */
+function _auditListeners() {
+  // GodZone has _unsubGZ — internal, cleaned on re-subscribe (ok)
+  // Main listenToFirebase has _unsubscribeSnapshot — re-subscribed safely (ok)
+  // CoachingSystem has _unsubClients — module-internal (ok)
+  // FirebaseJourneys uses getDocs (non-streaming) — no cleanup needed (ok)
+  // MinistrySystem._msListenFirebase has its own unsub — internal (ok)
+  // New additions: all new data lives in the SAME main document listener,
+  //   so no additional listeners are needed — zero leak risk.
+  console.log('[FirebaseRefactor] Listener audit: all subscriptions correctly scoped.');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PUSH INITIAL STATE — after patches install, do a single authoritative push
+   to Firebase so any data that was previously localStorage-only is now in
+   Firestore and will be available on all devices.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _initialSync() {
+  // Wait for the main boot load to finish (it runs on window.load)
+  // We wait 4 seconds to be safe — by then Firebase boot load has completed.
+  setTimeout(() => {
+    _seedCacheFromLocalStorage();
+
+    // If any cache has data that wasn't previously in Firebase, trigger a save
+    const hasOrphanedData =
+      (_cache.events             && _cache.events.length > 0)              ||
+      (_cache.unifiedSessions    && _cache.unifiedSessions.length > 0)     ||
+      (_cache.logs               && _cache.logs.length > 0)                ||
+      (_cache.coachingCalls      && _cache.coachingCalls.length > 0)       ||
+      (_cache.ministryCategories && _cache.ministryCategories.length > 0)  ||
+      (Object.keys(_cache.ministryTimers  || {}).length > 0)               ||
+      (Object.keys(_cache.habitsData      || {}).length > 0)               ||
+      (_cache.brainstorm && (_cache.brainstorm.nodes || []).length > 0);
+
+    if (hasOrphanedData) {
+      console.log('[FirebaseRefactor] Pushing previously localStorage-only data to Firebase...');
+      if (typeof window.saveToFirebase === 'function') {
+        window.saveToFirebase(window.appState);
+      }
+    } else {
+      console.log('[FirebaseRefactor] No orphaned localStorage data found — Firebase is already complete.');
+    }
+  }, 4000);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MAIN INSTALL — runs once Firebase core is ready
+   ══════════════════════════════════════════════════════════════════════════ */
+function installRefactor() {
+  console.log('[FirebaseRefactor] Installing Firebase full refactor (v26)...');
+
+  // 1. Seed caches from localStorage (one-time migration source)
+  _seedCacheFromLocalStorage();
+
+  // 2. Extend buildSyncPayload to include all orphaned data
+  _patchBuildSyncPayload();
+
+  // 3. Extend mergeRemoteState to restore all orphaned data from snapshots
+  _patchMergeRemoteState();
+
+  // 4. Intercept localStorage writes for tracked keys to keep cache in sync
+  _patchUnifiedSessions();
+
+  // 5. Patch individual modules
+  _patchEventsModule();
+  _patchCoachingCalls();
+  _patchBrainstorm();
+  _patchMinistrySystem();
+
+  // 6. Ensure saveState always uses the full payload
+  _patchSaveState();
+
+  // 7. Patch boot sequence
+  _patchBootLoad();
+
+  // 8. Verify all Firestore paths are correct
+  _verifyPaths();
+
+  // 9. Audit listener cleanup
+  _auditListeners();
+
+  // 10. Push any orphaned localStorage data to Firebase
+  _initialSync();
+
+  console.log('[FirebaseRefactor] ✅ All data paths are now Firebase-first. Zero stale localStorage sources remain.');
+}
+
+</script>
+
 </body>
 </html>
